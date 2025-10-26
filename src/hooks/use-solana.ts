@@ -10,6 +10,7 @@ import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
 import { Buffer } from 'buffer';
+import type { AsimovNftVaults } from '@/lib/types/asimov_nft_vaults';
 
 if (typeof window !== 'undefined') {
     window.Buffer = window.Buffer || Buffer;
@@ -32,7 +33,7 @@ export interface Nft {
 export const useSolana = () => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const [program, setProgram] = useState<Program<typeof idl> | null>(null);
+    const [program, setProgram] = useState<Program<AsimovNftVaults> | null>(null);
     const [provider, setProvider] = useState<AnchorProvider | null>(null);
     const [umi, setUmi] = useState<any>(null);
 
@@ -54,7 +55,7 @@ export const useSolana = () => {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
             const programInstance = new Program(idl as any, PROGRAM_ID, provider);
-            setProgram(programInstance);
+            setProgram(programInstance as Program<AsimovNftVaults>);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));
             newUmiWithWallet.use(mplCore());

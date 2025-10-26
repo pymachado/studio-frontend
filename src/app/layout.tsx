@@ -3,8 +3,8 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Solana Vault Manager',
-  description: 'Manage your NFT vaults on Solana with ease.',
+  title: 'ASIMOV VAULT MANAGER',
+  description: 'Manage your NFT vaults with ease.',
 };
 
 export default function RootLayout({

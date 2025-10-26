@@ -1,3 +1,34 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "nft1",
+      "description": "A vibrant swirling orb of energy",
+      "imageUrl": "https://images.unsplash.com/photo-1678802892726-81d72767280f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxlbmVyZ3klMjBvcmJ8ZW58MHx8fHwxNzYxNDU1ODA0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "energy orb"
+    },
+    {
+      "id": "nft2",
+      "description": "A pixelated samurai warrior standing ready",
+      "imageUrl": "https://images.unsplash.com/photo-1719338204063-303d7dac53ea?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cGl4ZWwlMjBzYW11cmFpfGVufDB8fHx8MTc2MTQ1NTgwNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "pixel samurai"
+    },
+    {
+      "id": "nft3",
+      "description": "A cartoon cat in an astronaut suit",
+      "imageUrl": "https://images.unsplash.com/photo-1609750340486-b0063919c5bd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxhc3Ryb25hdXQlMjBjYXR8ZW58MHx8fHwxNzYxNDU1ODA0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "astronaut cat"
+    },
+    {
+      "id": "nft4",
+      "description": "A glass sphere reflecting the Solana logo colors",
+      "imageUrl": "https://images.unsplash.com/photo-1505312949205-97ed14a1aa0d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxnbGFzcyUyMHNwaGVyZXxlbnwwfHx8fDE3NjE0NTU4MDR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "glass sphere"
+    },
+    {
+      "id": "nft5",
+      "description": "An ornate, glowing antique key",
+      "imageUrl": "https://images.unsplash.com/photo-1694106722203-38363d0015d3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxnbG93aW5nJTIwa2V5fGVufDB8fHx8MTc2MTQ1NTgwNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "glowing key"
+    }
+  ]
 }

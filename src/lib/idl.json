@@ -395,16 +395,7 @@
           "address": "11111111111111111111111111111111"
         }
       ],
-      "args": [
-        {
-          "name": "nft_mint",
-          "type": "pubkey"
-        },
-        {
-          "name": "asmv_mint",
-          "type": "pubkey"
-        }
-      ]
+      "args": []
     },
     {
       "name": "redeem_spl",

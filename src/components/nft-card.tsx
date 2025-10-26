@@ -3,7 +3,6 @@
 import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { VaultActionDialog } from '@/components/vault-action-dialog';
-import { PlaceHolderImages, type ImagePlaceholder } from '@/lib/placeholder-images';
 import { Button } from './ui/button';
 import type { Nft } from '@/hooks/use-solana';
 
@@ -13,7 +12,6 @@ interface NftCardProps {
 }
 
 export function NftCard({ nft, onAction }: NftCardProps) {
-  const image: ImagePlaceholder | undefined = PlaceHolderImages.find(p => p.id === nft.imageId);
 
   return (
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 bg-card">
@@ -22,13 +20,12 @@ export function NftCard({ nft, onAction }: NftCardProps) {
       </CardHeader>
       <CardContent className="flex-grow space-y-4">
         <div className="aspect-square relative w-full rounded-lg overflow-hidden border">
-            {image ? (
+            {nft.uri ? (
                  <Image
-                  src={image.imageUrl}
-                  alt={image.description}
+                  src={nft.uri}
+                  alt={nft.name}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  data-ai-hint={image.imageHint}
                 />
             ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">

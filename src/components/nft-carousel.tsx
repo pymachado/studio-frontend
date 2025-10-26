@@ -8,22 +8,25 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from '@/components/ui/carousel';
-import { NftCard, type Nft } from '@/components/nft-card';
+import { NftCard } from '@/components/nft-card';
+import type { Nft } from '@/hooks/use-solana';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Card, CardContent } from './ui/card';
 
 interface NftCarouselProps {
   nfts: Nft[];
+  onAction: (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => Promise<void>;
 }
 
-export function NftCarousel({ nfts }: NftCarouselProps) {
+export function NftCarousel({ nfts, onAction }: NftCarouselProps) {
   const { connected } = useWallet();
 
   if (!connected) {
     return (
-      <Card className="flex items-center justify-center py-12">
-        <CardContent>
-          <p className="text-muted-foreground">Please connect your wallet to see your NFTs.</p>
+      <Card className="flex items-center justify-center py-24 bg-card/50 border-dashed">
+        <CardContent className="text-center p-0">
+          <p className="text-lg font-medium text-muted-foreground">Please connect your wallet</p>
+          <p className="text-sm text-muted-foreground/80">Your NFTs will appear here once you're connected.</p>
         </CardContent>
       </Card>
     );
@@ -31,9 +34,10 @@ export function NftCarousel({ nfts }: NftCarouselProps) {
 
   if (nfts.length === 0) {
     return (
-       <Card className="flex items-center justify-center py-12">
-        <CardContent>
-          <p className="text-muted-foreground">No NFTs found in your wallet.</p>
+       <Card className="flex items-center justify-center py-24 bg-card/50 border-dashed">
+        <CardContent className="text-center p-0">
+          <p className="text-lg font-medium text-muted-foreground">No NFTs found</p>
+          <p className="text-sm text-muted-foreground/80">Mint a new NFT to get started.</p>
         </CardContent>
       </Card>
     );
@@ -52,7 +56,7 @@ export function NftCarousel({ nfts }: NftCarouselProps) {
           {nfts.map((nft) => (
             <CarouselItem key={nft.id} className="md:basis-1/2 lg:basis-1/3">
               <div className="p-1 h-full">
-                <NftCard nft={nft} />
+                <NftCard nft={nft} onAction={onAction} />
               </div>
             </CarouselItem>
           ))}

@@ -5,50 +5,47 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { VaultActionDialog } from '@/components/vault-action-dialog';
 import { PlaceHolderImages, type ImagePlaceholder } from '@/lib/placeholder-images';
 import { Button } from './ui/button';
-
-export type Nft = {
-  id: string;
-  name: string;
-  mintAddress: string;
-  vaultBalance: number;
-  imageId: string;
-  pda: string;
-};
+import type { Nft } from '@/hooks/use-solana';
 
 interface NftCardProps {
   nft: Nft;
+  onAction: (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => Promise<void>;
 }
 
-export function NftCard({ nft }: NftCardProps) {
+export function NftCard({ nft, onAction }: NftCardProps) {
   const image: ImagePlaceholder | undefined = PlaceHolderImages.find(p => p.id === nft.imageId);
 
   return (
-    <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 bg-card">
       <CardHeader>
-        <CardTitle className="font-headline tracking-tight">{nft.name}</CardTitle>
+        <CardTitle className="font-headline tracking-tight truncate">{nft.name}</CardTitle>
       </CardHeader>
       <CardContent className="flex-grow space-y-4">
-        {image && (
-          <div className="aspect-square relative w-full rounded-lg overflow-hidden border">
-             <Image
-              src={image.imageUrl}
-              alt={image.description}
-              fill
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              data-ai-hint={image.imageHint}
-            />
-          </div>
-        )}
+        <div className="aspect-square relative w-full rounded-lg overflow-hidden border">
+            {image ? (
+                 <Image
+                  src={image.imageUrl}
+                  alt={image.description}
+                  fill
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  data-ai-hint={image.imageHint}
+                />
+            ) : (
+                <div className="w-full h-full bg-muted flex items-center justify-center">
+                    <p className="text-muted-foreground text-sm">No Image</p>
+                </div>
+            )}
+        </div>
         <div>
           <p className="text-sm text-muted-foreground">Vault Balance</p>
-          <p className="text-xl font-bold text-primary">{nft.vaultBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ASMV</p>
+          <p className="text-xl font-bold text-primary">{nft.vaultBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} ASMV</p>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2">
         <VaultActionDialog
           actionType="Deposit"
           nft={nft}
-          onAction={async () => console.log('Deposit')}
+          onAction={onAction}
           trigger={
             <Button variant="outline" className="w-full">
               Deposit
@@ -58,7 +55,7 @@ export function NftCard({ nft }: NftCardProps) {
         <VaultActionDialog
           actionType="Redeem"
           nft={nft}
-          onAction={async () => console.log('Redeem')}
+          onAction={onAction}
           trigger={
             <Button variant="outline" className="w-full">
               Redeem

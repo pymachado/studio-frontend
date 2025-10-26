@@ -16,9 +16,10 @@ import { Card, CardContent } from './ui/card';
 interface NftCarouselProps {
   nfts: Nft[];
   onAction: (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => Promise<void>;
+  onInitialize: (nft: Nft) => Promise<void>;
 }
 
-export function NftCarousel({ nfts, onAction }: NftCarouselProps) {
+export function NftCarousel({ nfts, onAction, onInitialize }: NftCarouselProps) {
   const { connected } = useWallet();
 
   if (!connected) {
@@ -56,7 +57,7 @@ export function NftCarousel({ nfts, onAction }: NftCarouselProps) {
           {nfts.map((nft) => (
             <CarouselItem key={nft.id} className="md:basis-1/2 lg:basis-1/3">
               <div className="p-1 h-full">
-                <NftCard nft={nft} onAction={onAction} />
+                <NftCard nft={nft} onAction={onAction} onInitialize={onInitialize} />
               </div>
             </CarouselItem>
           ))}

@@ -5,13 +5,31 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { VaultActionDialog } from '@/components/vault-action-dialog';
 import { Button } from './ui/button';
 import type { Nft } from '@/hooks/use-solana';
+import { useState } from 'react';
+import { toast } from 'react-toastify';
+import { Loader2 } from 'lucide-react';
 
 interface NftCardProps {
   nft: Nft;
   onAction: (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => Promise<void>;
+  onInitialize: (nft: Nft) => Promise<void>;
 }
 
-export function NftCard({ nft, onAction }: NftCardProps) {
+export function NftCard({ nft, onAction, onInitialize }: NftCardProps) {
+  const [isInitializing, setIsInitializing] = useState(false);
+
+  const handleInitialize = async () => {
+    setIsInitializing(true);
+    const toastId = toast.loading("Initializing vault...");
+    try {
+      await onInitialize(nft);
+      toast.update(toastId, { render: "Vault initialized!", type: "success", isLoading: false, autoClose: 5000 });
+    } catch(error) {
+      toast.update(toastId, { render: `Initialization failed: ${(error as Error).message}`, type: "error", isLoading: false, autoClose: 5000 });
+    } finally {
+      setIsInitializing(false);
+    }
+  };
 
   return (
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300 bg-card">
@@ -39,26 +57,35 @@ export function NftCard({ nft, onAction }: NftCardProps) {
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2">
-        <VaultActionDialog
-          actionType="Deposit"
-          nft={nft}
-          onAction={onAction}
-          trigger={
-            <Button variant="outline" className="w-full">
-              Deposit
-            </Button>
-          }
-        />
-        <VaultActionDialog
-          actionType="Redeem"
-          nft={nft}
-          onAction={onAction}
-          trigger={
-            <Button variant="outline" className="w-full">
-              Redeem
-            </Button>
-          }
-        />
+        {nft.needsInitialization ? (
+          <Button onClick={handleInitialize} disabled={isInitializing} className="w-full">
+            {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Initialize Vault
+          </Button>
+        ) : (
+          <>
+            <VaultActionDialog
+              actionType="Deposit"
+              nft={nft}
+              onAction={onAction}
+              trigger={
+                <Button variant="outline" className="w-full">
+                  Deposit
+                </Button>
+              }
+            />
+            <VaultActionDialog
+              actionType="Redeem"
+              nft={nft}
+              onAction={onAction}
+              trigger={
+                <Button variant="outline" className="w-full">
+                  Redeem
+                </Button>
+              }
+            />
+          </>
+        )}
       </CardFooter>
     </Card>
   );

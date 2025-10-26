@@ -13,7 +13,7 @@ import type { Nft } from '@/hooks/use-solana';
 
 export default function Home() {
   const { connected } = useWallet();
-  const { isFetching, nfts, totalBalance, onAction, onMint } = useSolana();
+  const { isFetching, nfts, totalBalance, onAction, onMint, onInitialize } = useSolana();
 
   const LoadingSkeleton = () => (
     <div className="space-y-8">
@@ -52,7 +52,7 @@ export default function Home() {
               } />
             </div>
 
-            <NftCarousel nfts={nfts} onAction={onAction} />
+            <NftCarousel nfts={nfts} onAction={onAction} onInitialize={onInitialize} />
           </>
         )}
       </main>

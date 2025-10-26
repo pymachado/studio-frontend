@@ -5,7 +5,7 @@ import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
-import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -28,6 +28,7 @@ export interface Nft {
     imageId: string;
     pda: string;
     uri: string;
+    needsInitialization?: boolean;
 }
 
 export const useSolana = () => {
@@ -75,30 +76,72 @@ export const useSolana = () => {
         const balanceNumber = balanceBN.toNumber() / divisor.toNumber();
         return balanceNumber;
     }
+    
+    const onInitialize = async (nft: Nft) => {
+        if (!program || !wallet || !provider) {
+            toast.error("Program or wallet not initialized.");
+            throw new Error("Program or wallet not initialized.");
+        }
+
+        const nftMintPubkey = new PublicKey(nft.mintAddress);
+
+        try {
+            const [founderVaultPda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
+                program.programId
+            );
+
+            const asmvVaultAta = await getAssociatedTokenAddress(ASMV_MINT, founderVaultPda, true);
+
+            const txSignature = await program.methods
+                .initVault(nftMintPubkey, ASMV_MINT)
+                .accounts({
+                    user: wallet.publicKey,
+                    nftMint: nftMintPubkey,
+                    asmvMint: ASMV_MINT,
+                    founderVault: founderVaultPda,
+                    asmvVault: asmvVaultAta,
+                    systemProgram: SystemProgram.programId,
+                })
+                .rpc();
+            
+            await connection.confirmTransaction(txSignature, 'confirmed');
+            toast.success(`Vault for ${nft.name} initialized successfully!`);
+            await fetchProgramData();
+
+        } catch (error) {
+            console.error('Error initializing vault:', error);
+            toast.error(`Failed to initialize vault: ${(error as Error).message}`);
+            throw error;
+        }
+    };
+
 
     const fetchProgramData = useCallback(async () => {
         if (!umi || !wallet || !program) return;
 
         setIsFetching(true);
-        console.log('Fetching data for wallet:', wallet.publicKey.toString());
         
         try {
             const assets = await fetchAssetsByOwner(umi, wallet.publicKey);
-            console.log(`Found ${assets.length} assets.`);
 
             const nftDetailsPromises = assets.map(async (asset) => {
                  try {
-                    const metadata = await fetch(asset.uri).then(res => res.json());
+                    const response = await fetch(asset.uri);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch metadata: ${response.statusText}`);
+                    }
+                    const metadata = await response.json();
                     return {
                         id: asset.publicKey.toString(),
                         name: asset.name,
                         mintAddress: asset.publicKey.toString(),
-                        uri: metadata.image || '', // Ensure uri is the image url
+                        uri: metadata.image || '',
                         imageUrl: metadata.image,
                     };
                 } catch (e) {
                     console.error("Error processing asset metadata:", asset.name, e);
-                    return { // Fallback if URI fetch fails
+                    return {
                         id: asset.publicKey.toString(),
                         name: asset.name,
                         mintAddress: asset.publicKey.toString(),
@@ -144,13 +187,11 @@ export const useSolana = () => {
             const total = validNfts.reduce((acc, nft) => acc + nft.vaultBalance, 0);
             setTotalBalance(total);
             
-            if (assets.length > 0 && nfts.length === 0) {
-              toast.success(`Loaded ${assets.length} NFTs and their vaults.`);
-            }
-
         } catch (error) {
             console.error('Error fetching program data:', error);
-            toast.error('Failed to fetch wallet data.');
+            if (error instanceof Error && !error.message.includes('Wallet-adapter')) {
+               toast.error('Failed to fetch wallet data.');
+            }
         } finally {
             setIsFetching(false);
         }
@@ -164,23 +205,21 @@ export const useSolana = () => {
 
     // Subscription logic
     useEffect(() => {
-        if (!program || nfts.length === 0) return;
+        if (!program || nfts.length === 0 || !wallet) return;
 
         const newSubscriptions = new Map<string, number>();
 
         nfts.forEach(nft => {
+            if (nft.needsInitialization) return;
+
             const pda = new PublicKey(nft.pda);
             if (subscriptionIds.current.has(pda.toString())) {
-                // Keep existing subscription
                 newSubscriptions.set(pda.toString(), subscriptionIds.current.get(pda.toString())!);
                 subscriptionIds.current.delete(pda.toString());
             } else {
-                // Create new subscription
-                console.log(`Subscribing to PDA: ${pda.toString()}`)
                 const subId = program.provider.connection.onAccountChange(
                     pda,
                     (accountInfo) => {
-                        console.log(`Account change detected for ${pda.toString()}`);
                         const updatedVault = program.coder.accounts.decode('FounderVault', accountInfo.data);
                         
                         setNfts(prevNfts => {
@@ -201,26 +240,20 @@ export const useSolana = () => {
             }
         });
 
-        // Unsubscribe from old PDAs
         subscriptionIds.current.forEach((subId, pda) => {
-            console.log(`Unsubscribing from old PDA: ${pda}`);
             program.provider.connection.removeAccountChangeListener(subId);
         });
 
-        // Update the ref to the new subscriptions
         subscriptionIds.current = newSubscriptions;
 
-        // Cleanup on component unmount
         return () => {
-            console.log("Cleaning up subscriptions");
-            subscriptionIds.current.forEach((subId, pda) => {
-                console.log(`Unsubscribing from ${pda}`);
+            subscriptionIds.current.forEach((subId) => {
                 program.provider.connection.removeAccountChangeListener(subId);
             });
             subscriptionIds.current.clear();
         };
 
-    }, [program, nfts]);
+    }, [program, nfts, wallet]);
 
 
     const onAction = async (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => {
@@ -237,17 +270,23 @@ export const useSolana = () => {
             let txSignature;
             const userAsmvAccount = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
             const asmvFounderVault = await getAssociatedTokenAddress(ASMV_MINT, founderVault, true);
+            
+            // Check if user's ASMV account exists, if not, create it
+            const userAsmvAccountInfo = await connection.getAccountInfo(userAsmvAccount);
+            const instructions = [];
+            if (!userAsmvAccountInfo) {
+                instructions.push(
+                    createAssociatedTokenAccountInstruction(
+                        wallet.publicKey, // payer
+                        userAsmvAccount, // ata
+                        wallet.publicKey, // owner
+                        ASMV_MINT // mint
+                    )
+                );
+            }
 
             if (actionType === 'Deposit') {
-                 console.log('Depositing:', {
-                    user: wallet.publicKey.toString(),
-                    nftMint: nftMint.toString(),
-                    founderVault: founderVault.toString(),
-                    userAsmvAccount: userAsmvAccount.toString(),
-                    asmvFounderVault: asmvFounderVault.toString(),
-                    asmvMint: ASMV_MINT.toString(),
-                })
-                txSignature = await program.methods
+                const depositTx = await program.methods
                     .depositSpl(lamports)
                     .accounts({
                         user: wallet.publicKey,
@@ -256,11 +295,12 @@ export const useSolana = () => {
                         userAsmvAccount: userAsmvAccount,
                         asmvFounderVault: asmvFounderVault,
                         asmvMint: ASMV_MINT,
-                        systemProgram: SystemProgram.programId,
                     })
-                    .rpc();
+                    .instruction();
+                instructions.push(depositTx);
+
             } else { // Redeem
-                 txSignature = await program.methods
+                 const redeemTx = await program.methods
                     .redeemSpl(lamports)
                     .accounts({
                         user: wallet.publicKey,
@@ -269,11 +309,19 @@ export const useSolana = () => {
                         asmvMint: ASMV_MINT,
                         asmvFounderVault: asmvFounderVault,
                         userAsmvAccount: userAsmvAccount,
-                        systemProgram: SystemProgram.programId,
                     })
-                    .rpc();
+                    .instruction();
+                instructions.push(redeemTx);
             }
+
+            const { blockhash } = await connection.getLatestBlockhash();
+            const tx = new (await import('@solana/web3.js')).Transaction({
+                recentBlockhash: blockhash,
+                feePayer: wallet.publicKey,
+            }).add(...instructions);
             
+            const signedTx = await wallet.signTransaction(tx);
+            txSignature = await connection.sendRawTransaction(signedTx.serialize());
             await connection.confirmTransaction(txSignature, 'confirmed');
 
         } catch (error) {
@@ -289,13 +337,10 @@ export const useSolana = () => {
         
         console.log("Simulating mint for:", name, uri);
         
-        // This is a placeholder. In a real app, you would mint the NFT
-        // and then call `init_vault` on your program.
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
         await fetchProgramData();
     };
 
-    return { isFetching, totalBalance, nfts, nftCount: nfts.length, onAction, onMint };
+    return { isFetching, totalBalance, nfts, nftCount: nfts.length, onAction, onMint, onInitialize };
 };
-
-    

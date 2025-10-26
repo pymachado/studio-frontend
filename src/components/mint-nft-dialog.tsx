@@ -34,13 +34,15 @@ export function MintNftDialog({ trigger, onMint }: MintNftDialogProps) {
     }
     
     setIsSubmitting(true);
+    const toastId = toast.loading("Minting NFT (simulation)...");
     try {
       await onMint(name, uri);
+      toast.update(toastId, { render: "NFT Minted (Simulated)!", type: "success", isLoading: false, autoClose: 5000 });
       setOpen(false);
       setName('');
       setUri('');
     } catch (error) {
-       // Error is handled by the hook which shows a toast
+       toast.update(toastId, { render: `Minting failed: ${(error as Error).message}`, type: "error", isLoading: false, autoClose: 5000 });
        console.error("Minting failed in dialog", error);
     } finally {
         setIsSubmitting(false);

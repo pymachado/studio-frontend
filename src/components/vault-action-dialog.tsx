@@ -16,6 +16,7 @@ import type { Nft } from "@/hooks/use-solana";
 import { ArrowDownCircle, ArrowUpCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { toast as reactToastify } from "react-toastify";
 
 interface VaultActionDialogProps {
   actionType: "Deposit" | "Redeem";
@@ -34,22 +35,19 @@ export function VaultActionDialog({ actionType, nft, trigger, onAction }: VaultA
   const handleSubmit = async () => {
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Amount",
-        description: "Please enter a positive number.",
-      });
+      reactToastify.error("Please enter a positive number.");
       return;
     }
     
     setIsSubmitting(true);
+    const toastId = reactToastify.loading(`Processing ${actionType}...`);
     try {
       await onAction(nft.mintAddress, nft.pda, numericAmount, actionType);
-      // Success toast is handled in the useSolana hook
+      reactToastify.update(toastId, { render: `${actionType} successful!`, type: "success", isLoading: false, autoClose: 5000 });
       setOpen(false);
       setAmount('');
     } catch (error) {
-       // Error toast is handled in the useSolana hook
+       reactToastify.update(toastId, { render: `${actionType} failed: ${(error as Error).message}`, type: "error", isLoading: false, autoClose: 5000 });
        console.error("Action failed in dialog", error);
     } finally {
       setIsSubmitting(false);

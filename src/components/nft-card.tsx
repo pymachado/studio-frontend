@@ -5,7 +5,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { VaultActionDialog } from '@/components/vault-action-dialog';
 import { PlaceHolderImages, type ImagePlaceholder } from '@/lib/placeholder-images';
 import { Button } from './ui/button';
-import { useSolana } from '@/hooks/use-solana';
 
 export type Nft = {
   id: string;
@@ -22,7 +21,6 @@ interface NftCardProps {
 
 export function NftCard({ nft }: NftCardProps) {
   const image: ImagePlaceholder | undefined = PlaceHolderImages.find(p => p.id === nft.imageId);
-  const { handleDeposit, handleRedeem } = useSolana();
 
   return (
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -50,7 +48,7 @@ export function NftCard({ nft }: NftCardProps) {
         <VaultActionDialog
           actionType="Deposit"
           nft={nft}
-          onAction={handleDeposit}
+          onAction={async () => console.log('Deposit')}
           trigger={
             <Button variant="outline" className="w-full">
               Deposit
@@ -60,7 +58,7 @@ export function NftCard({ nft }: NftCardProps) {
         <VaultActionDialog
           actionType="Redeem"
           nft={nft}
-          onAction={handleRedeem}
+          onAction={async () => console.log('Redeem')}
           trigger={
             <Button variant="outline" className="w-full">
               Redeem

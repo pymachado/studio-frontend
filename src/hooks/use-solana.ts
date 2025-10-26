@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, setProvider, BN } from '@project-serum/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';

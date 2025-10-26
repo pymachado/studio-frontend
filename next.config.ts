@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'azure-petite-swan-479.mypinata.cloud',
+        port: '',
+        pathname: '/**',
+      }
     ],
   },
 };

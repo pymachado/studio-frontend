@@ -2,6 +2,8 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { WalletProvider } from '@/components/wallet-provider';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 export const metadata: Metadata = {
   title: 'ASIMOV VAULT MANAGER',
@@ -24,6 +26,7 @@ export default function RootLayout({
         <WalletProvider>
           {children}
           <Toaster />
+          <ToastContainer theme="dark" position="bottom-right" />
         </WalletProvider>
       </body>
     </html>

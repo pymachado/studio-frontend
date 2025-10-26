@@ -8,19 +8,12 @@ import { PlusCircle } from 'lucide-react';
 import { MintNftDialog } from '@/components/mint-nft-dialog';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Nft } from '@/hooks/use-solana';
-import { useState } from 'react';
+import { useSolana } from '@/hooks/use-solana';
+
 
 export default function Home() {
   const { connected } = useWallet();
-  // Mock data since we are reverting useSolana hook
-  const isFetching = false;
-  const totalBalance = 0;
-  const nftCount = 0;
-  const nfts: Nft[] = [];
-  const onAction = async () => { console.log('Action triggered'); };
-  const onMint = async () => { console.log('Mint triggered'); };
-
+  const { totalBalance, nfts, nftCount, onAction, onMint, isFetching } = useSolana();
 
   const LoadingSkeleton = () => (
     <div className="space-y-8">

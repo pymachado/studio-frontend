@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "react-toastify";
 
 interface MintNftDialogProps {
   trigger: React.ReactNode;
@@ -25,29 +25,25 @@ export function MintNftDialog({ trigger, onMint }: MintNftDialogProps) {
   const [name, setName] = useState('');
   const [uri, setUri] = useState('');
   const [open, setOpen] = useState(false);
-  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!name || !uri) {
-      toast({
-        variant: "destructive",
-        title: "Missing Information",
-        description: "Please provide both a name and a URI for the NFT.",
-      });
+      toast.error("Please provide both a name and a URI for the NFT.");
       return;
     }
     
+    setIsSubmitting(true);
     try {
       await onMint(name, uri);
       setOpen(false);
       setName('');
       setUri('');
     } catch (error) {
-       toast({
-        variant: "destructive",
-        title: "Minting Failed",
-        description: (error as Error).message || "An unknown error occurred during minting.",
-      });
+       // Error is handled by the hook which shows a toast
+       console.error("Minting failed in dialog", error);
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
@@ -61,7 +57,7 @@ export function MintNftDialog({ trigger, onMint }: MintNftDialogProps) {
             Mint New NFT
           </DialogTitle>
           <DialogDescription>
-            Create a new NFT by providing its metadata.
+            Create a new NFT by providing its metadata. This is a simulation.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -75,6 +71,7 @@ export function MintNftDialog({ trigger, onMint }: MintNftDialogProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g., 'Solana Sphere'" 
               className="col-span-3" 
+              disabled={isSubmitting}
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
@@ -87,16 +84,20 @@ export function MintNftDialog({ trigger, onMint }: MintNftDialogProps) {
               className="col-span-3"
               value={uri}
               onChange={(e) => setUri(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button type="button" variant="secondary">
+            <Button type="button" variant="secondary" disabled={isSubmitting}>
               Cancel
             </Button>
           </DialogClose>
-          <Button type="button" onClick={handleSubmit}>Mint NFT</Button>
+          <Button type="button" onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting ? 'Minting...' : 'Mint NFT'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

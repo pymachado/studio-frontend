@@ -3,9 +3,20 @@
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Wallet } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 export function WalletConnect() {
   const { connected } = useWallet();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    // Render a placeholder or nothing on the server
+    return null;
+  }
 
   return (
     <WalletMultiButton style={{

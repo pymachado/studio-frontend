@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, setProvider, BN } from '@project-serum/anchor';
+import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
@@ -21,7 +21,7 @@ const ASMV_MINT = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95");
 const DECIMALS = 6;
 
 export interface Nft {
-    id: string;
+    id: string; 
     name: string;
     mintAddress: string;
     vaultBalance: number;
@@ -33,7 +33,7 @@ export interface Nft {
 export const useSolana = () => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const [program, setProgram] = useState<Program<AsimovNftVaults> | null>(null);
+    const [program, setProgram] = useState<Program<AsimovNftVaults>>();
     const [provider, setProvider] = useState<AnchorProvider | null>(null);
     const [umi, setUmi] = useState<any>(null);
 
@@ -54,14 +54,14 @@ export const useSolana = () => {
         if (wallet && connection) {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
-            const programInstance = new Program(idl as AsimovNftVaults, PROGRAM_ID, provider);
-            setProgram(programInstance as Program<AsimovNftVaults>);
+            const programInstance = new Program(idl as AsimovNftVaults, provider);
+            setProgram(programInstance);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));
             newUmiWithWallet.use(mplCore());
             setUmi(newUmiWithWallet);
         } else {
-            setProgram(null);
+            setProgram(undefined);
             setProvider(null);
             setNfts([]);
             setTotalBalance(0);
@@ -69,7 +69,7 @@ export const useSolana = () => {
         }
     }, [wallet, connection]);
 
-    const uiBalance = (balanceBN: BN) => {
+    const uiBalance = (balanceBN: BN | undefined) => {
         if (!balanceBN) return 0;
         const divisor = new BN(10).pow(new BN(DECIMALS));
         const balanceNumber = balanceBN.toNumber() / divisor.toNumber();
@@ -93,7 +93,7 @@ export const useSolana = () => {
                         id: asset.publicKey.toString(),
                         name: asset.name,
                         mintAddress: asset.publicKey.toString(),
-                        uri: asset.uri,
+                        uri: metadata.image || '', // Ensure uri is the image url
                         imageUrl: metadata.image,
                     };
                 } catch (e) {
@@ -102,7 +102,7 @@ export const useSolana = () => {
                         id: asset.publicKey.toString(),
                         name: asset.name,
                         mintAddress: asset.publicKey.toString(),
-                        uri: asset.uri,
+                        uri: '',
                         imageUrl: '',
                     };
                 }
@@ -123,7 +123,7 @@ export const useSolana = () => {
                         ...nft,
                         pda: founderVaultPda.toString(),
                         vaultBalance: uiBalance(vaultAccount.balance as BN),
-                        imageId: `mockId${index}` // Using index for mock id
+                        imageId: `mockId${index}`
                     };
                 } catch (error) {
                     return {
@@ -297,3 +297,5 @@ export const useSolana = () => {
 
     return { isFetching, totalBalance, nfts, nftCount: nfts.length, onAction, onMint };
 };
+
+    

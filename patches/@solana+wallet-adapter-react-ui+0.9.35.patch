@@ -1,0 +1,33 @@
+diff --git a/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.js b/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.js
+index 7384a56..6e59e2b 100644
+--- a/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.js
++++ b/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.js
+@@ -1,4 +1,4 @@
+ export * from './components/WalletConnectButton';
+ export * from './components/WalletDisconnectButton';
+-export * from './components/WalletModal';
+ export * from './components/WalletModalButton';
+ export * from './components/WalletModalProvider';
+ export * from './components/WalletMultiButton';
+diff --git a/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.native.js b/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.native.js
+index 7384a56..6e59e2b 100644
+--- a/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.native.js
++++ b/node_modules/@solana/wallet-adapter-react-ui/lib/esm/index.native.js
+@@ -1,4 +1,4 @@
+ export * from './components/WalletConnectButton';
+ export * from './components/WalletDisconnectButton';
+-export * from './components/WalletModal';
+ export * from './components/WalletModalButton';
+ export * from './components/WalletModalProvider';
+ export * from './components/WalletMultiButton';
+diff --git a/node_modules/@solana/wallet-adapter-react-ui/lib/types/index.d.ts b/node_modules/@solana/wallet-adapter-react-ui/lib/types/index.d.ts
+index cddf661..b9336ab 100644
+--- a/node_modules/@solana/wallet-adapter-react-ui/lib/types/index.d.ts
++++ b/node_modules/@solana/wallet-adapter-react-ui/lib/types/index.d.ts
+@@ -1,5 +1,4 @@
+ export * from './components/WalletConnectButton';
+ export * from './components/WalletDisconnectButton';
+-export * from './components/WalletModal';
+ export * from './components/WalletModalButton';
+ export * from './components/WalletModalProvider';
+ export * from './components/WalletMultiButton';

@@ -14,18 +14,52 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Nft } from "./nft-card";
 import { ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface VaultActionDialogProps {
   actionType: "Deposit" | "Redeem";
   nft: Nft;
   trigger: React.ReactNode;
+  onAction: (mint: string, pda: string, amount: number) => Promise<void>;
 }
 
-export function VaultActionDialog({ actionType, nft, trigger }: VaultActionDialogProps) {
+export function VaultActionDialog({ actionType, nft, trigger, onAction }: VaultActionDialogProps) {
   const Icon = actionType === 'Deposit' ? ArrowDownCircle : ArrowUpCircle;
+  const [amount, setAmount] = useState('');
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async () => {
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Amount",
+        description: "Please enter a positive number.",
+      });
+      return;
+    }
+    
+    try {
+      await onAction(nft.mintAddress, nft.pda, numericAmount);
+      toast({
+        title: "Success",
+        description: `${actionType} of ${numericAmount} ASMV for ${nft.name} was successful.`,
+      });
+      setOpen(false);
+      setAmount('');
+    } catch (error) {
+       toast({
+        variant: "destructive",
+        title: "Transaction Failed",
+        description: (error as Error).message || "An unknown error occurred.",
+      });
+    }
+  };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -48,7 +82,14 @@ export function VaultActionDialog({ actionType, nft, trigger }: VaultActionDialo
             <Label htmlFor="amount" className="text-right">
               Amount
             </Label>
-            <Input id="amount" type="number" placeholder="0.00 ASMV" className="col-span-3" />
+            <Input 
+              id="amount" 
+              type="number" 
+              placeholder="0.00 ASMV" 
+              className="col-span-3"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </div>
         </div>
         <DialogFooter>
@@ -57,7 +98,7 @@ export function VaultActionDialog({ actionType, nft, trigger }: VaultActionDialo
               Cancel
             </Button>
           </DialogClose>
-          <Button type="submit">{actionType}</Button>
+          <Button type="button" onClick={handleSubmit}>{actionType}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

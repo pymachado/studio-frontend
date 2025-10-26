@@ -6,7 +6,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-export function DashboardStats() {
+interface DashboardStatsProps {
+  totalBalance: number;
+  nftCount: number;
+}
+
+export function DashboardStats({ totalBalance, nftCount }: DashboardStatsProps) {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <Card>
@@ -19,7 +24,7 @@ export function DashboardStats() {
           </svg>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">1,234.56 ASMV</div>
+          <div className="text-2xl font-bold">{totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ASMV</div>
           <p className="text-xs text-muted-foreground">
             Total value across all vaults
           </p>
@@ -35,7 +40,7 @@ export function DashboardStats() {
           </svg>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">5</div>
+          <div className="text-2xl font-bold">{nftCount}</div>
           <p className="text-xs text-muted-foreground">
             Number of NFTs in your wallet
           </p>

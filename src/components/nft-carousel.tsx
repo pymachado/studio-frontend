@@ -9,27 +9,47 @@ import {
   CarouselPrevious,
 } from '@/components/ui/carousel';
 import { NftCard, type Nft } from '@/components/nft-card';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Card, CardContent } from './ui/card';
 
-const mockNfts: Nft[] = [
-  { id: '1', name: 'Cyber Orb', mintAddress: 'CybOrb123...', vaultBalance: 500, imageId: 'nft1' },
-  { id: '2', name: 'Pixel Samurai', mintAddress: 'PixSam456...', vaultBalance: 1200, imageId: 'nft2' },
-  { id: '3', name: 'Astro Cat', mintAddress: 'AsCat789...', vaultBalance: 750, imageId: 'nft3' },
-  { id: '4', name: 'Solana Sphere', mintAddress: 'SolSph111...', vaultBalance: 2500, imageId: 'nft4' },
-  { id: '5', name: 'Quantum Key', mintAddress: 'QuaKey222...', vaultBalance: 300, imageId: 'nft5' },
-];
+interface NftCarouselProps {
+  nfts: Nft[];
+}
 
-export function NftCarousel() {
+export function NftCarousel({ nfts }: NftCarouselProps) {
+  const { connected } = useWallet();
+
+  if (!connected) {
+    return (
+      <Card className="flex items-center justify-center py-12">
+        <CardContent>
+          <p className="text-muted-foreground">Please connect your wallet to see your NFTs.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (nfts.length === 0) {
+    return (
+       <Card className="flex items-center justify-center py-12">
+        <CardContent>
+          <p className="text-muted-foreground">No NFTs found in your wallet.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="relative">
       <Carousel
         opts={{
           align: 'start',
-          loop: true,
+          loop: nfts.length > 2,
         }}
         className="w-full"
       >
         <CarouselContent>
-          {mockNfts.map((nft) => (
+          {nfts.map((nft) => (
             <CarouselItem key={nft.id} className="md:basis-1/2 lg:basis-1/3">
               <div className="p-1 h-full">
                 <NftCard nft={nft} />

@@ -1,8 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { VaultActionDialog } from '@/components/vault-action-dialog';
 import { PlaceHolderImages, type ImagePlaceholder } from '@/lib/placeholder-images';
 import { Button } from './ui/button';
+import { useSolana } from '@/hooks/use-solana';
 
 export type Nft = {
   id: string;
@@ -10,6 +13,7 @@ export type Nft = {
   mintAddress: string;
   vaultBalance: number;
   imageId: string;
+  pda: string;
 };
 
 interface NftCardProps {
@@ -18,6 +22,7 @@ interface NftCardProps {
 
 export function NftCard({ nft }: NftCardProps) {
   const image: ImagePlaceholder | undefined = PlaceHolderImages.find(p => p.id === nft.imageId);
+  const { handleDeposit, handleRedeem } = useSolana();
 
   return (
     <Card className="flex flex-col h-full shadow-lg hover:shadow-xl transition-shadow duration-300">
@@ -38,13 +43,14 @@ export function NftCard({ nft }: NftCardProps) {
         )}
         <div>
           <p className="text-sm text-muted-foreground">Vault Balance</p>
-          <p className="text-xl font-bold text-primary">{nft.vaultBalance.toLocaleString()} ASMV</p>
+          <p className="text-xl font-bold text-primary">{nft.vaultBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ASMV</p>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between gap-2">
         <VaultActionDialog
           actionType="Deposit"
           nft={nft}
+          onAction={handleDeposit}
           trigger={
             <Button variant="outline" className="w-full">
               Deposit
@@ -54,6 +60,7 @@ export function NftCard({ nft }: NftCardProps) {
         <VaultActionDialog
           actionType="Redeem"
           nft={nft}
+          onAction={handleRedeem}
           trigger={
             <Button variant="outline" className="w-full">
               Redeem

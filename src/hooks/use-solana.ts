@@ -54,7 +54,7 @@ export const useSolana = () => {
         if (wallet && connection) {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
-            const programInstance = new Program(idl as any, PROGRAM_ID, provider);
+            const programInstance = new Program(idl as AsimovNftVaults, PROGRAM_ID, provider);
             setProgram(programInstance as Program<AsimovNftVaults>);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));

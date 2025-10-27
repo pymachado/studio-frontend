@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
-import { useConnection, useAnchorWallet, AnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
+import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
+import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
-import { PublicKey, SystemProgram, Transaction, Connection } from '@solana/web3.js';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getMint } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
@@ -17,7 +17,7 @@ if (typeof window !== 'undefined') {
 }
 
 const PROGRAM_ID = new PublicKey(idl.address);
-const ASMV_MINT = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95");
+// Removed hardcoded ASMV_MINT as it should be fetched from the vault
 const DECIMALS = 6;
 
 export interface Nft {
@@ -31,7 +31,7 @@ export interface Nft {
     needsInitialization?: boolean;
 }
 
-const balanceOf = async (connection: Connection, tokenAccount: PublicKey) => {
+const balanceOf = async (connection: any, tokenAccount: PublicKey) => {
     const accountInfo = await connection.getTokenAccountBalance(tokenAccount);
     return new BN(accountInfo.value.amount);
 }
@@ -90,6 +90,10 @@ export const useSolana = () => {
         }
 
         const nftMintPubkey = new PublicKey(nft.mintAddress);
+        // This is a placeholder, as the actual mint is defined on contract init.
+        // The contract itself should use a predefined ASMV mint.
+        // For client-side logic, we can fetch it from an initialized vault.
+        const placeholderAsmvMint = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95"); // Placeholder
 
         try {
             const [founderVaultPda] = PublicKey.findProgramAddressSync(
@@ -97,14 +101,14 @@ export const useSolana = () => {
                 program.programId
             );
 
-            const asmvVaultAta = await getAssociatedTokenAddress(ASMV_MINT, founderVaultPda, true);
+            const asmvVaultAta = await getAssociatedTokenAddress(placeholderAsmvMint, founderVaultPda, true);
 
             const txSignature = await program.methods
-                .initVault(nftMintPubkey, ASMV_MINT)
+                .initVault(nftMintPubkey, placeholderAsmvMint)
                 .accounts({
                     user: wallet.publicKey,
                     nftMint: nftMintPubkey,
-                    asmvMint: ASMV_MINT,
+                    asmvMint: placeholderAsmvMint,
                     founderVault: founderVaultPda,
                     asmvVault: asmvVaultAta,
                     systemProgram: SystemProgram.programId,
@@ -272,16 +276,19 @@ export const useSolana = () => {
         const founderVault = new PublicKey(pda);
         
         try {
+            const vaultAccount = await program.account.founderVault.fetch(founderVault);
+            const asmvMint = vaultAccount.asmvMint;
+
             if (actionType === 'Deposit') {
-                const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
+                const decimals = (await getMint(connection, asmvMint, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
                 const amountInLamports = new BN(amount * (10 ** decimals));
 
-                const userAsmvAta = getAssociatedTokenAddressSync(ASMV_MINT, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID);
+                const userAsmvAta = getAssociatedTokenAddressSync(asmvMint, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID);
                 let balance;
                 try {
                     balance = await balanceOf(connection, userAsmvAta);
                 } catch (error: any) {
-                    if (error.name === 'TokenAccountNotFoundError') {
+                    if (error.message.includes('could not find account')) { // More robust check
                         balance = new BN(0);
                     } else {
                         throw error;
@@ -293,7 +300,7 @@ export const useSolana = () => {
                 }
 
                 const asmvVaultAta = getAssociatedTokenAddressSync(
-                    ASMV_MINT,
+                    asmvMint,
                     founderVault,
                     true,
                     TOKEN_2022_PROGRAM_ID
@@ -307,7 +314,7 @@ export const useSolana = () => {
                         founderVault: founderVault,
                         userAsmvAccount: userAsmvAta,
                         asmvFounderVault: asmvVaultAta,
-                        asmvMint: ASMV_MINT,
+                        asmvMint: asmvMint,
                         tokenProgram: TOKEN_2022_PROGRAM_ID,
                         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                         systemProgram: SystemProgram.programId,
@@ -319,18 +326,15 @@ export const useSolana = () => {
                 tx.add(depositInstruction);
                 tx.recentBlockhash = blockhash;
                 
-                const txSignature = await provider.sendAndConfirm(
-                    tx,
-                    [], // This was incorrect, should be empty or contain signers if needed. The provider handles the wallet payer.
-                    {skipPreflight: true});
+                const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
                 
-                const SOLSCAN_URL = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
+                const solscanUrl = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
     
                 toast.success(
                     React.createElement('div', null,
                         `Deposited ${amount} ASMV successfully! `,
                         React.createElement('a', {
-                            href: SOLSCAN_URL,
+                            href: solscanUrl,
                             target: '_blank',
                             rel: 'noopener noreferrer',
                             style: { color: 'blue', textDecoration: 'underline' }
@@ -342,13 +346,13 @@ export const useSolana = () => {
             } else { // Redeem
                 const lamports = new BN(amount * (10 ** DECIMALS));
                 const userAsmvAccount = await getAssociatedTokenAddressSync(
-                    ASMV_MINT, 
+                    asmvMint, 
                     wallet.publicKey, 
                     false, 
                     TOKEN_2022_PROGRAM_ID);
                 
                 const asmvFounderVault = await getAssociatedTokenAddressSync(
-                    ASMV_MINT, 
+                    asmvMint, 
                     founderVault, 
                     true,
                     TOKEN_2022_PROGRAM_ID);
@@ -361,7 +365,7 @@ export const useSolana = () => {
                         founderVault: founderVault,
                         userAsmvAccount: userAsmvAccount,
                         asmvFounderVault: asmvFounderVault,
-                        asmvMint: ASMV_MINT,
+                        asmvMint: asmvMint,
                         tokenProgram: TOKEN_2022_PROGRAM_ID,
                         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                         systemProgram: SystemProgram.programId
@@ -373,10 +377,9 @@ export const useSolana = () => {
                 tx.add(redeemTx);
                 tx.recentBlockhash = blockhash;
                 
-                await provider.sendAndConfirm(
-                    tx,
-                    [],
-                    {skipPreflight: true});
+                await provider.sendAndConfirm(tx, [], {skipPreflight: true});
+
+                toast.success(`Redeemed ${amount} ASMV successfully!`);
             }
 
         } catch (error) {

@@ -2,10 +2,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, setProvider, BN, Idl } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -34,7 +34,7 @@ export interface Nft {
 export const useSolana = () => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const [program, setProgram] = useState<Program<AsimovNftVaults>>();
+    const [program, setProgram] = useState<Program<Idl>>();
     const [provider, setProvider] = useState<AnchorProvider | null>(null);
     const [umi, setUmi] = useState<any>(null);
 
@@ -123,7 +123,7 @@ export const useSolana = () => {
         setIsFetching(true);
         
         try {
-            const assets = await fetchAssetsByOwner(umi, wallet.publicKey);
+            const assets = await fetchAssetsByOwner(umi, wallet.publicKey, { skipDerivePlugins: false });
 
             const nftDetailsPromises = assets.map(async (asset) => {
                  try {
@@ -295,6 +295,9 @@ export const useSolana = () => {
                         userAsmvAccount: userAsmvAccount,
                         asmvFounderVault: asmvFounderVault,
                         asmvMint: ASMV_MINT,
+                        tokenProgram: TOKEN_2022_PROGRAM_ID,
+                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        systemProgram: SystemProgram.programId
                     })
                     .instruction();
                 instructions.push(depositTx);

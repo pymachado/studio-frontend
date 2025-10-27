@@ -5,7 +5,7 @@ import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, getMint, getAccount, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, getMint, getAccount } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -36,7 +36,6 @@ async function balanceOf(connection: any, ata: PublicKey) {
        const ataInfo = await getAccount(connection, ata, 'confirmed');
         return new BN(ataInfo.amount);
     } catch (error: any) {
-        console.error("Error fetching balance:", error);
         if (error.name === 'TokenAccountNotFoundError') {
             return new BN(0); // Return 0 if ATA doesn't exist
         }
@@ -137,7 +136,7 @@ export const useSolana = () => {
         setIsFetching(true);
         
         try {
-            const assets = await fetchAssetsByOwner(umi, wallet.publicKey);
+            const assets = await fetchAssetsByOwner(umi, wallet.publicKey.toString());
 
             const nftDetailsPromises = assets.map(async (asset) => {
                  try {
@@ -284,23 +283,16 @@ export const useSolana = () => {
                     return;
                 }
 
-                console.log('Program initialized, Program ID:', program.programId.toString());
-
                 const decimals = (await getMint(connection, ASMV_MINT)).decimals;
-                console.log('Token decimals:', decimals);
-
                 const amountInLamports = new BN(amount * (10 ** decimals));
-                console.log('Amount to deposit (in smallest unit):', amountInLamports.toString());
 
                 const userAsmvAta = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
                 let balance;
                 try {
                     balance = await balanceOf(connection, userAsmvAta);
-                    console.log('User ASMV balance:', balance.toString());
                 } catch (error: any) {
                     if (error.name === 'TokenAccountNotFoundError') {
                         balance = new BN(0);
-                        console.warn('User ASMV ATA not found, balance set to 0');
                     } else {
                         throw error;
                     }
@@ -315,19 +307,13 @@ export const useSolana = () => {
                     [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
                     program.programId
                 );
-                console.log('Founder Vault PDA:', founderVaultPda.toString());
 
                 const asmvVaultAta = await getAssociatedTokenAddress(
                     ASMV_MINT,
                     founderVaultPda,
                     true
                 );
-                console.log('ASMV Vault ATA:', asmvVaultAta.toString());
 
-                console.log('Deriving user_asmv_ata...');
-                console.log('User ASMV ATA (re-derived):', userAsmvAta.toString());
-
-                console.log('Preparing transaction...');
                 const depositInstruction = await program.methods
                     .depositSpl(amountInLamports)
                     .accounts({
@@ -337,9 +323,6 @@ export const useSolana = () => {
                         userAsmvAccount: userAsmvAta,
                         asmvFounderVault: asmvVaultAta,
                         asmvMint: ASMV_MINT,
-                        tokenProgram: TOKEN_PROGRAM_ID,
-                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                        systemProgram: SystemProgram.programId,
                     })
                     .instruction();
 
@@ -351,17 +334,10 @@ export const useSolana = () => {
 
                 const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
                     
-                console.log('Transaction successful with signature:', txSignature);
                 const solscanUrl = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
     
                 toast.success(
-                    <div>
-                        <span>{`Deposited ${amount} ASMV successfully! `}</span>
-                        <a href={solscanUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'blue', textDecoration: 'underline' }}>
-                            View on Solscan
-                        </a>
-                    </div>,
-                    { autoClose: 8000, closeOnClick: false }
+                    `Deposited ${amount} ASMV successfully!`
                 );
 
             } else { // Redeem
@@ -411,13 +387,7 @@ export const useSolana = () => {
 
                 const solscanUrl = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
                 toast.success(
-                    <div>
-                        <span>{`Redeemed ${amount} ASMV successfully! `}</span>
-                        <a href={solscanUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'blue', textDecoration: 'underline' }}>
-                            View on Solscan
-                        </a>
-                    </div>,
-                    { autoClose: 8000, closeOnClick: false }
+                    `Redeemed ${amount} ASMV successfully!`
                 );
             }
 

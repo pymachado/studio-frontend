@@ -2,10 +2,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, getMint, getAccount, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -30,6 +30,20 @@ export interface Nft {
     uri: string;
     needsInitialization?: boolean;
 }
+
+async function balanceOf(connection: any, ata: PublicKey) {
+    try {
+       const ataInfo = await getAccount(connection, ata, 'confirmed');
+        return new BN(ataInfo.amount);
+    } catch (error: any) {
+        console.error("Error fetching balance:", error);
+        if (error.name === 'TokenAccountNotFoundError') {
+            return new BN(0); // Return 0 if ATA doesn't exist
+        }
+        throw error;
+    }
+}
+
 
 export const useSolana = () => {
     const { connection } = useConnection();
@@ -264,22 +278,56 @@ export const useSolana = () => {
 
         try {
             if (actionType === 'Deposit') {
-                const amountInLamports = new BN(amount * (10 ** DECIMALS));
-                
+                 if (!amount || amount <= 0) {
+                    console.error('Invalid amount');
+                    toast.error('Please enter a valid positive amount.');
+                    return;
+                }
+
+                console.log('Program initialized, Program ID:', program.programId.toString());
+
+                const decimals = (await getMint(connection, ASMV_MINT)).decimals;
+                console.log('Token decimals:', decimals);
+
+                const amountInLamports = new BN(amount * (10 ** decimals));
+                console.log('Amount to deposit (in smallest unit):', amountInLamports.toString());
+
+                const userAsmvAta = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
+                let balance;
+                try {
+                    balance = await balanceOf(connection, userAsmvAta);
+                    console.log('User ASMV balance:', balance.toString());
+                } catch (error: any) {
+                    if (error.name === 'TokenAccountNotFoundError') {
+                        balance = new BN(0);
+                        console.warn('User ASMV ATA not found, balance set to 0');
+                    } else {
+                        throw error;
+                    }
+                }
+                if (balance.lt(amountInLamports)) {
+                    toast.error('Insufficient ASMV balance for the deposit.');
+                    return;
+                }
+
                 const nftMintPubkey = new PublicKey(mint);
                 const [founderVaultPda] = PublicKey.findProgramAddressSync(
                     [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
                     program.programId
                 );
+                console.log('Founder Vault PDA:', founderVaultPda.toString());
 
                 const asmvVaultAta = await getAssociatedTokenAddress(
                     ASMV_MINT,
                     founderVaultPda,
                     true
                 );
+                console.log('ASMV Vault ATA:', asmvVaultAta.toString());
 
-                const userAsmvAta = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
+                console.log('Deriving user_asmv_ata...');
+                console.log('User ASMV ATA (re-derived):', userAsmvAta.toString());
 
+                console.log('Preparing transaction...');
                 const depositInstruction = await program.methods
                     .depositSpl(amountInLamports)
                     .accounts({
@@ -294,11 +342,13 @@ export const useSolana = () => {
                         systemProgram: SystemProgram.programId,
                     })
                     .instruction();
-    
+
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
                 const tx = new Transaction();
                 tx.add(depositInstruction);
                 tx.recentBlockhash = blockhash;
+                tx.feePayer = wallet.publicKey;
+
                 const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
                     
                 console.log('Transaction successful with signature:', txSignature);

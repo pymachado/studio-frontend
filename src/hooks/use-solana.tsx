@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
-import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getMint } from '@solana/spl-token';
@@ -40,7 +40,7 @@ const balanceOf = async (connection: any, tokenAccount: PublicKey) => {
 export const useSolana = () => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const [program, setProgram] = useState<Program<AsimovNftVaults>>();
+    const [program, setProgram] = useState<Program<Idl>>();
     const [provider, setProvider] = useState<AnchorProvider | null>(null);
     const [umi, setUmi] = useState<any>(null);
 
@@ -61,7 +61,7 @@ export const useSolana = () => {
         if (wallet && connection) {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
-            const programInstance = new Program(idl as any, provider);
+            const programInstance = new Program(idl, provider);
             setProgram(programInstance);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));
@@ -93,7 +93,7 @@ export const useSolana = () => {
         // This is a placeholder, as the actual mint is defined on contract init.
         // The contract itself should use a predefined ASMV mint.
         // For client-side logic, we can fetch it from an initialized vault.
-        const placeholderAsmvMint = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95"); // Placeholder
+        const placeholderAsmvMint = new PublicKey("9RYhX3sHYePZw2QGzP3iM25qcC5kqEqiatCvihGDG5DJ"); // Placeholder
 
         try {
             const [founderVaultPda] = PublicKey.findProgramAddressSync(
@@ -278,7 +278,7 @@ export const useSolana = () => {
         const nftMintPubkey = new PublicKey(mint);
 
         try {
-                const ASMV_MINT = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95"); // Placeholder, should be fetched
+                const ASMV_MINT = new PublicKey("9RYhX3sHYePZw2QGzP3iM25qcC5kqEqiatCvihGDG5DJ"); // Placeholder, should be fetched
                 const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
                 const amountInLamports = new BN(amount * (10 ** decimals));
 

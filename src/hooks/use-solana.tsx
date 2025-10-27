@@ -17,7 +17,8 @@ if (typeof window !== 'undefined') {
 }
 
 const PROGRAM_ID = new PublicKey(idl.address);
-// Removed hardcoded ASMV_MINT as it should be fetched from the vault
+// This is a placeholder, as the actual mint is defined on contract init.
+const ASMV_MINT = new PublicKey("9RYhX3sHYePZw2QGzP3iM25qcC5kqEqiatCvihGDG5DJ");
 const DECIMALS = 6;
 
 export interface Nft {
@@ -32,8 +33,15 @@ export interface Nft {
 }
 
 const balanceOf = async (connection: any, tokenAccount: PublicKey) => {
-    const accountInfo = await connection.getTokenAccountBalance(tokenAccount);
-    return new BN(accountInfo.value.amount);
+    try {
+        const accountInfo = await connection.getTokenAccountBalance(tokenAccount);
+        return new BN(accountInfo.value.amount);
+    } catch (error: any) {
+        if (error.message.includes('could not find account')) {
+            return new BN(0);
+        }
+        throw error;
+    }
 }
 
 
@@ -90,10 +98,6 @@ export const useSolana = () => {
         }
 
         const nftMintPubkey = new PublicKey(nft.mintAddress);
-        // This is a placeholder, as the actual mint is defined on contract init.
-        // The contract itself should use a predefined ASMV mint.
-        // For client-side logic, we can fetch it from an initialized vault.
-        const placeholderAsmvMint = new PublicKey("9RYhX3sHYePZw2QGzP3iM25qcC5kqEqiatCvihGDG5DJ"); // Placeholder
 
         try {
             const [founderVaultPda] = PublicKey.findProgramAddressSync(
@@ -101,14 +105,14 @@ export const useSolana = () => {
                 program.programId
             );
 
-            const asmvVaultAta = await getAssociatedTokenAddress(placeholderAsmvMint, founderVaultPda, true);
+            const asmvVaultAta = await getAssociatedTokenAddress(ASMV_MINT, founderVaultPda, true);
 
             const txSignature = await program.methods
-                .initVault(nftMintPubkey, placeholderAsmvMint)
+                .initVault(nftMintPubkey, ASMV_MINT)
                 .accounts({
                     user: wallet.publicKey,
                     nftMint: nftMintPubkey,
-                    asmvMint: placeholderAsmvMint,
+                    asmvMint: ASMV_MINT,
                     founderVault: founderVaultPda,
                     asmvVault: asmvVaultAta,
                     systemProgram: SystemProgram.programId,
@@ -215,93 +219,73 @@ export const useSolana = () => {
 
     // Subscription logic
     useEffect(() => {
-        if (!program || nfts.length === 0 || !wallet) return;
+        if (!wallet || !nfts.length || !connection) return;
 
         const newSubscriptions = new Map<string, number>();
 
-        nfts.forEach(nft => {
-            if (nft.needsInitialization) return;
+        const subscribeToVaults = async () => {
+            nfts.forEach(nft => {
+                if(nft.needsInitialization) return;
 
-            const pda = new PublicKey(nft.pda);
-            if (subscriptionIds.current.has(pda.toString())) {
-                newSubscriptions.set(pda.toString(), subscriptionIds.current.get(pda.toString())!);
-                subscriptionIds.current.delete(pda.toString());
-            } else {
-                const subId = program.provider.connection.onAccountChange(
-                    pda,
-                    (accountInfo) => {
-                        const updatedVault = program.coder.accounts.decode('FounderVault', accountInfo.data);
-                        
-                        setNfts(prevNfts => {
-                            const newNfts = prevNfts.map(n => {
-                                if (n.pda === pda.toString()) {
-                                    return { ...n, vaultBalance: uiBalance(updatedVault.balance) };
-                                }
-                                return n;
-                            });
-                            const newTotal = newNfts.reduce((acc, nft) => acc + nft.vaultBalance, 0);
-                            setTotalBalance(newTotal);
-                            return newNfts;
-                        });
-                    },
-                    "confirmed"
-                );
-                newSubscriptions.set(pda.toString(), subId);
-            }
-        });
+                const vaultPda = new PublicKey(nft.pda);
+                if (subscriptionIds.current.has(vaultPda.toString())) {
+                    newSubscriptions.set(vaultPda.toString(), subscriptionIds.current.get(vaultPda.toString())!);
+                    subscriptionIds.current.delete(vaultPda.toString());
+                } else {
+                    const subscriptionId = connection.onAccountChange(
+                        vaultPda,
+                        async (accountInfo, context) => {
+                            console.log(`Account ${vaultPda.toString()} changed at slot ${context.slot}`);
+                            await fetchProgramData(); 
+                        },
+                        {commitment: 'confirmed'}
+                    );
+                    newSubscriptions.set(vaultPda.toString(), subscriptionId);
+                    console.log(`Subscribed to ${vaultPda.toString()} with ID ${subscriptionId}`);
+                }
+            });
+             // Unsubscribe from old vaults that are no longer in the list
+            subscriptionIds.current.forEach((id, pda) => {
+                connection.removeAccountChangeListener(id);
+                console.log(`Unsubscribed from ${pda} with ID ${id}`);
+            });
+            subscriptionIds.current = newSubscriptions;
+        };
 
-        subscriptionIds.current.forEach((subId, pda) => {
-            program.provider.connection.removeAccountChangeListener(subId);
-        });
+        subscribeToVaults();
 
-        subscriptionIds.current = newSubscriptions;
-
+        // Cleanup on component unmount
         return () => {
-            subscriptionIds.current.forEach((subId) => {
-                program.provider.connection.removeAccountChangeListener(subId);
+            subscriptionIds.current.forEach((id, pda) => {
+                connection.removeAccountChangeListener(id);
+                console.log(`Unsubscribed from ${pda} with ID ${id}`);
             });
             subscriptionIds.current.clear();
         };
+    }, [wallet, nfts, connection, fetchProgramData]);
 
-    }, [program, nfts, wallet]);
 
-
-    const onAction = async (mint: string, amount: number) => {
+    const onAction = async (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => {
         if (!program || !wallet || !provider) {
             toast.error("Program or wallet not initialized.");
             throw new Error("Program or wallet not initialized.");
         }
 
-        const initializedProgram = new Program(idl as any, provider);
-        const programId = initializedProgram.programId;
-
         const nftMintPubkey = new PublicKey(mint);
-
+        const founderVaultPda = new PublicKey(pda);
+        
         try {
-                const ASMV_MINT = new PublicKey("9RYhX3sHYePZw2QGzP3iM25qcC5kqEqiatCvihGDG5DJ"); // Placeholder, should be fetched
-                const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
-                const amountInLamports = new BN(amount * (10 ** decimals));
+            const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
+            const amountInLamports = new BN(amount * (10 ** decimals));
 
+            if (actionType === 'Deposit') {
                 const userAsmvAta = getAssociatedTokenAddressSync(ASMV_MINT, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID);
-                let balance;
-                try {
-                    balance = await balanceOf(connection, userAsmvAta);
-                } catch (error: any) {
-                    if (error.message.includes('could not find account')) { // More robust check
-                        balance = new BN(0);
-                    } else {
-                        throw error;
-                    }
-                }
+                const balance = await balanceOf(connection, userAsmvAta);
+                
                 if (balance.lt(amountInLamports)) {
                     toast.error('Insufficient ASMV balance for the deposit.');
                     return;
                 }
-    
-                const [founderVaultPda] = PublicKey.findProgramAddressSync(
-                    [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
-                    programId
-                );
     
                 const asmvVaultAta = getAssociatedTokenAddressSync(
                     ASMV_MINT,
@@ -310,7 +294,7 @@ export const useSolana = () => {
                     TOKEN_2022_PROGRAM_ID
                 );
     
-                const depositInstruction = await initializedProgram.methods
+                const depositInstruction = await program.methods
                     .depositSpl(amountInLamports)
                     .accounts({
                         user: provider.publicKey,
@@ -326,19 +310,55 @@ export const useSolana = () => {
                     .instruction();
     
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
-                const tx = new Transaction();
-                tx.add(depositInstruction);
+                const tx = new Transaction().add(depositInstruction);
                 tx.recentBlockhash = blockhash;
-                
-                await provider.sendAndConfirm(
-                    tx,
-                    provider.wallet.payer, 
-                    {skipPreflight: true});
+                tx.feePayer = wallet.publicKey;
 
+                await provider.sendAndConfirm(tx);
                 toast.success(`Deposited ${amount} ASMV successfully!`);
 
+            } else if (actionType === 'Redeem') {
+                
+                const asmvVaultAta = getAssociatedTokenAddressSync(
+                    ASMV_MINT,
+                    founderVaultPda,
+                    true,
+                    TOKEN_2022_PROGRAM_ID
+                );
+
+                const userAsmvAta = getAssociatedTokenAddressSync(
+                    ASMV_MINT,
+                    wallet.publicKey,
+                    false,
+                    TOKEN_2022_PROGRAM_ID
+                );
+
+                 const redeemInstruction = await program.methods
+                    .redeemSpl(amountInLamports)
+                    .accounts({
+                        user: provider.publicKey,
+                        nftMint: nftMintPubkey,
+                        founderVault: founderVaultPda,
+                        asmvFounderVault: asmvVaultAta,
+                        userAsmvAccount: userAsmvAta,
+                        asmvMint: ASMV_MINT,
+                        tokenProgram: TOKEN_2022_PROGRAM_ID,
+                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        systemProgram: SystemProgram.programId,
+                    })
+                    .instruction();
+
+                const {blockhash} = await connection.getLatestBlockhash('confirmed');
+                const tx = new Transaction().add(redeemInstruction);
+                tx.recentBlockhash = blockhash;
+                tx.feePayer = wallet.publicKey;
+
+                await provider.sendAndConfirm(tx);
+                toast.success(`Redeemed ${amount} ASMV successfully!`);
+            }
+
         } catch (error) {
-            console.error(`Error during action:`, error);
+            console.error(`Error during ${actionType}:`, error);
             throw error;
         }
     };

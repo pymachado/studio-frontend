@@ -4,8 +4,8 @@ import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, setProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
-import { PublicKey, SystemProgram } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
+import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -55,7 +55,7 @@ export const useSolana = () => {
         if (wallet && connection) {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
-            const programInstance = new Program(idl, provider);
+            const programInstance = new Program(idl as any, provider);
             setProgram(programInstance);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));
@@ -262,44 +262,79 @@ export const useSolana = () => {
             throw new Error("Program or wallet not initialized.");
         }
 
-        const nftMint = new PublicKey(mint);
-        const founderVault = new PublicKey(pda);
-        const lamports = new BN(amount * (10 ** DECIMALS));
-
         try {
-            let txSignature;
-            const userAsmvAccount = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
-            const asmvFounderVault = await getAssociatedTokenAddress(ASMV_MINT, founderVault, true);
-            
-            // Check if user's ASMV account exists, if not, create it
-            const userAsmvAccountInfo = await connection.getAccountInfo(userAsmvAccount);
-            const instructions = [];
-            if (!userAsmvAccountInfo) {
-                instructions.push(
-                    createAssociatedTokenAccountInstruction(
-                        wallet.publicKey, // payer
-                        userAsmvAccount, // ata
-                        wallet.publicKey, // owner
-                        ASMV_MINT // mint
-                    )
-                );
-            }
-
             if (actionType === 'Deposit') {
-                const depositTx = await program.methods
-                    .depositSpl(lamports)
+                const amountInLamports = new BN(amount * (10 ** DECIMALS));
+                
+                const nftMintPubkey = new PublicKey(mint);
+                const [founderVaultPda] = PublicKey.findProgramAddressSync(
+                    [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
+                    program.programId
+                );
+
+                const asmvVaultAta = await getAssociatedTokenAddress(
+                    ASMV_MINT,
+                    founderVaultPda,
+                    true
+                );
+
+                const userAsmvAta = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
+
+                const depositInstruction = await program.methods
+                    .depositSpl(amountInLamports)
                     .accounts({
-                        user: wallet.publicKey,
-                        nftMint: nftMint,
-                        founderVault: founderVault,
-                        userAsmvAccount: userAsmvAccount,
-                        asmvFounderVault: asmvFounderVault,
+                        user: provider.publicKey,
+                        nftMint: nftMintPubkey,
+                        founderVault: founderVaultPda,
+                        userAsmvAccount: userAsmvAta,
+                        asmvFounderVault: asmvVaultAta,
                         asmvMint: ASMV_MINT,
+                        tokenProgram: TOKEN_PROGRAM_ID,
+                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                        systemProgram: SystemProgram.programId,
                     })
                     .instruction();
-                instructions.push(depositTx);
+    
+                const {blockhash} = await connection.getLatestBlockhash('confirmed');
+                const tx = new Transaction();
+                tx.add(depositInstruction);
+                tx.recentBlockhash = blockhash;
+                const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
+                    
+                console.log('Transaction successful with signature:', txSignature);
+                const solscanUrl = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
+    
+                toast.success(
+                    <div>
+                        <span>{`Deposited ${amount} ASMV successfully! `}</span>
+                        <a href={solscanUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'blue', textDecoration: 'underline' }}>
+                            View on Solscan
+                        </a>
+                    </div>,
+                    { autoClose: 8000, closeOnClick: false }
+                );
 
             } else { // Redeem
+                const lamports = new BN(amount * (10 ** DECIMALS));
+                const nftMint = new PublicKey(mint);
+                const founderVault = new PublicKey(pda);
+                let txSignature;
+                const userAsmvAccount = await getAssociatedTokenAddress(ASMV_MINT, wallet.publicKey);
+                const asmvFounderVault = await getAssociatedTokenAddress(ASMV_MINT, founderVault, true);
+                
+                const userAsmvAccountInfo = await connection.getAccountInfo(userAsmvAccount);
+                const instructions = [];
+                if (!userAsmvAccountInfo) {
+                    instructions.push(
+                        createAssociatedTokenAccountInstruction(
+                            wallet.publicKey,
+                            userAsmvAccount, 
+                            wallet.publicKey, 
+                            ASMV_MINT
+                        )
+                    );
+                }
+
                  const redeemTx = await program.methods
                     .redeemSpl(lamports)
                     .accounts({
@@ -312,17 +347,29 @@ export const useSolana = () => {
                     })
                     .instruction();
                 instructions.push(redeemTx);
-            }
-
-            const { blockhash } = await connection.getLatestBlockhash();
-            const tx = new (await import('@solana/web3.js')).Transaction({
-                recentBlockhash: blockhash,
-                feePayer: wallet.publicKey,
-            }).add(...instructions);
             
-            const signedTx = await wallet.signTransaction(tx);
-            txSignature = await connection.sendRawTransaction(signedTx.serialize());
-            await connection.confirmTransaction(txSignature, 'confirmed');
+
+                const { blockhash } = await connection.getLatestBlockhash();
+                const tx = new Transaction({
+                    recentBlockhash: blockhash,
+                    feePayer: wallet.publicKey,
+                }).add(...instructions);
+                
+                const signedTx = await wallet.signTransaction(tx);
+                txSignature = await connection.sendRawTransaction(signedTx.serialize());
+                await connection.confirmTransaction(txSignature, 'confirmed');
+
+                const solscanUrl = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
+                toast.success(
+                    <div>
+                        <span>{`Redeemed ${amount} ASMV successfully! `}</span>
+                        <a href={solscanUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'blue', textDecoration: 'underline' }}>
+                            View on Solscan
+                        </a>
+                    </div>,
+                    { autoClose: 8000, closeOnClick: false }
+                );
+            }
 
         } catch (error) {
             console.error(`Error during ${actionType}:`, error);

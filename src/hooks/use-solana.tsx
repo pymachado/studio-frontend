@@ -312,10 +312,23 @@ export const useSolana = () => {
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
                 const tx = new Transaction().add(depositInstruction);
                 tx.recentBlockhash = blockhash;
-                tx.feePayer = wallet.publicKey;
-
-                await provider.sendAndConfirm(tx);
-                toast.success(`Deposited ${amount} ASMV successfully!`);
+            
+                const txSignature = await provider.sendAndConfirm(tx, provider.wallet.payer, {skipPreflight: true});
+                const SOLSCAN_URL = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
+                toast.success(
+                    <div>
+                        Deposited {amount} ASMOV successfully!{' '}
+                        <a
+                            href={SOLSCAN_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'blue', textDecoration: 'underline' }}
+                        >
+                            View on Solscan
+                        </a>
+                    </div>,
+                    { autoClose: 8000, closeOnClick: false }
+                );
 
             } else if (actionType === 'Redeem') {
                 
@@ -351,10 +364,25 @@ export const useSolana = () => {
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
                 const tx = new Transaction().add(redeemInstruction);
                 tx.recentBlockhash = blockhash;
-                tx.feePayer = wallet.publicKey;
+                
 
-                await provider.sendAndConfirm(tx);
-                toast.success(`Redeemed ${amount} ASMV successfully!`);
+                const txSignature = await provider.sendAndConfirm(tx, provider.wallet.payer, {skipPreflight: true});
+                const SOLSCAN_URL = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
+                toast.success(
+                    <div>
+                        Redeemed {amount} ASMOV successfully!{' '}
+                        <a
+                            href={SOLSCAN_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'blue', textDecoration: 'underline' }}
+                        >
+                            View on Solscan
+                        </a>
+                    </div>,
+                    { autoClose: 8000, closeOnClick: false }
+                );
+
             }
 
         } catch (error) {

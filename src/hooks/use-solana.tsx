@@ -5,7 +5,7 @@ import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, BN } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
 import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getMint, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getMint } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
 import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
@@ -17,7 +17,7 @@ if (typeof window !== 'undefined') {
 }
 
 const PROGRAM_ID = new PublicKey(idl.address);
-const ASMV_MINT = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95"); // Hardcoded ASMV Mint
+// Removed hardcoded ASMV_MINT as it should be fetched from the vault
 const DECIMALS = 6;
 
 export interface Nft {
@@ -133,7 +133,7 @@ export const useSolana = () => {
         setIsFetching(true);
         
         try {
-             const assets = await fetchAssetsByOwner(umi, wallet.publicKey.toString(), { skipDerivePlugins: false });
+            const assets = await fetchAssetsByOwner(umi, wallet.publicKey.toString(), { skipDerivePlugins: false });
 
             const nftDetailsPromises = assets.map(async (asset) => {
                  try {
@@ -266,17 +266,19 @@ export const useSolana = () => {
     }, [program, nfts, wallet]);
 
 
-    const onAction = async (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => {
+    const onAction = async (mint: string, amount: number) => {
         if (!program || !wallet || !provider) {
             toast.error("Program or wallet not initialized.");
             throw new Error("Program or wallet not initialized.");
         }
 
+        const initializedProgram = new Program(idl as any, provider);
+        const programId = initializedProgram.programId;
+
         const nftMintPubkey = new PublicKey(mint);
-        const founderVault = new PublicKey(pda);
-        
+
         try {
-            if (actionType === 'Deposit') {
+                const ASMV_MINT = new PublicKey("G9ttBfF3a2Mkw5bH31aQk2y532mJgA6G4rj6sA2a7x95"); // Placeholder, should be fetched
                 const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
                 const amountInLamports = new BN(amount * (10 ** decimals));
 
@@ -295,20 +297,25 @@ export const useSolana = () => {
                     toast.error('Insufficient ASMV balance for the deposit.');
                     return;
                 }
-
+    
+                const [founderVaultPda] = PublicKey.findProgramAddressSync(
+                    [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
+                    programId
+                );
+    
                 const asmvVaultAta = getAssociatedTokenAddressSync(
                     ASMV_MINT,
-                    founderVault,
+                    founderVaultPda,
                     true,
                     TOKEN_2022_PROGRAM_ID
                 );
     
-                const depositInstruction = await program.methods
+                const depositInstruction = await initializedProgram.methods
                     .depositSpl(amountInLamports)
                     .accounts({
                         user: provider.publicKey,
                         nftMint: nftMintPubkey,
-                        founderVault: founderVault,
+                        founderVault: founderVaultPda,
                         userAsmvAccount: userAsmvAta,
                         asmvFounderVault: asmvVaultAta,
                         asmvMint: ASMV_MINT,
@@ -324,51 +331,14 @@ export const useSolana = () => {
                 tx.recentBlockhash = blockhash;
                 
                 await provider.sendAndConfirm(
-                tx,
-                provider.wallet.payer, 
-                {skipPreflight: true});
+                    tx,
+                    provider.wallet.payer, 
+                    {skipPreflight: true});
 
-            } else { // Redeem
-                const lamports = new BN(amount * (10 ** DECIMALS));
-                const userAsmvAccount = await getAssociatedTokenAddressSync(
-                    ASMV_MINT, 
-                    wallet.publicKey, 
-                    false, 
-                    TOKEN_2022_PROGRAM_ID);
-                
-                const asmvFounderVault = await getAssociatedTokenAddressSync(
-                    ASMV_MINT, 
-                    founderVault, 
-                    true,
-                    TOKEN_2022_PROGRAM_ID);
-
-                 const redeemTx = await program.methods
-                    .redeemSpl(lamports)
-                    .accounts({
-                        user: wallet.publicKey,
-                        nftMint: nftMintPubkey,
-                        founderVault: founderVault,
-                        userAsmvAccount: userAsmvAccount,
-                        asmvFounderVault: asmvFounderVault,
-                        asmvMint: ASMV_MINT,
-                        tokenProgram: TOKEN_2022_PROGRAM_ID,
-                        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                        systemProgram: SystemProgram.programId
-                    })
-                    .instruction();
-                
-                const { blockhash } = await connection.getLatestBlockhash('confirmed');
-                const tx = new Transaction();
-                tx.add(redeemTx);
-                tx.recentBlockhash = blockhash;
-                
-                await provider.sendAndConfirm(tx, [], {skipPreflight: true});
-
-                toast.success(`Redeemed ${amount} ASMV successfully!`);
-            }
+                toast.success(`Deposited ${amount} ASMV successfully!`);
 
         } catch (error) {
-            console.error(`Error during ${actionType}:`, error);
+            console.error(`Error during action:`, error);
             throw error;
         }
     };

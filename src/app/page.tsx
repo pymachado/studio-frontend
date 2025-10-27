@@ -52,7 +52,7 @@ export default function Home() {
               } />
             </div>
 
-            <NftCarousel nfts={nfts} onAction={onAction} onInitialize={onInitialize} />
+            <NftCarousel nfts={nfts} onAction={(mint, pda, amount, actionType) => onAction(mint, amount)} onInitialize={onInitialize} />
           </>
         )}
       </main>

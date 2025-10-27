@@ -59,7 +59,8 @@ export const useSolana = () => {
     const [totalBalance, setTotalBalance] = useState(0);
     const [nfts, setNfts] = useState<Nft[]>([]);
     
-    const subscriptionIds = useRef<Map<string, number>>(new Map());
+    const vaultSubscriptionIds = useRef<Map<string, number>>(new Map());
+    const tokenAccountSubscriptionIds = useRef<Map<string, number>>(new Map());
 
     // Initialize Umi
     useEffect(() => {
@@ -140,7 +141,7 @@ export const useSolana = () => {
         setIsFetching(true);
         
         try {
-            const assets = await fetchAssetsByOwner(umi, wallet.publicKey.toString(), { skipDerivePlugins: false });
+            const assets = await fetchAssetsByOwner(umi, wallet.publicKey);
 
             const nftDetailsPromises = assets.map(async (asset) => {
                  try {
@@ -220,40 +221,97 @@ export const useSolana = () => {
         }
     }, [wallet, umi, program, fetchProgramData]);
 
-    // Subscription logic
+    // Subscription to vault account changes (deposits/redeems)
     useEffect(() => {
       if (!wallet || !nfts.length || !connection || !fetchProgramData) return;
   
-      const subscribeToVaults = async () => {
-          nfts.forEach(vault => {
-              if (vault.needsInitialization) return;
-              const vaultPda = new PublicKey(vault.pda);
-              if (!subscriptionIds.current.has(vaultPda.toString())) {
-                  const subscriptionId = connection.onAccountChange(
-                      vaultPda,
-                      async (accountInfo, context) => {
-                          console.log(`Account ${vaultPda.toString()} changed at slot ${context.slot}`);
-                          await fetchProgramData(); // Refetch vaults al detectar un cambio
-                      },
-                      {commitment: 'confirmed'}
-                  );
-                  subscriptionIds.current.set(vaultPda.toString(), subscriptionId);
-                  console.log(`Subscribed to ${vaultPda.toString()} with ID ${subscriptionId}`);
-              }
-          });
-      };
+      const newSubscriptions = new Map<string, number>();
+
+      nfts.forEach(vault => {
+          if (vault.needsInitialization) return;
+          const vaultPda = new PublicKey(vault.pda);
+          
+          if (vaultSubscriptionIds.current.has(vaultPda.toString())) {
+             newSubscriptions.set(vaultPda.toString(), vaultSubscriptionIds.current.get(vaultPda.toString())!);
+             vaultSubscriptionIds.current.delete(vaultPda.toString());
+          } else {
+              const subscriptionId = connection.onAccountChange(
+                  vaultPda,
+                  (accountInfo, context) => {
+                      console.log(`Vault account ${vaultPda.toString()} changed at slot ${context.slot}`);
+                      fetchProgramData(); 
+                  },
+                  'confirmed'
+              );
+              newSubscriptions.set(vaultPda.toString(), subscriptionId);
+              console.log(`Subscribed to vault ${vaultPda.toString()} with ID ${subscriptionId}`);
+          }
+      });
+      
+      // Unsubscribe from old vaults
+      vaultSubscriptionIds.current.forEach((id, pda) => {
+        connection.removeAccountChangeListener(id);
+        console.log(`Unsubscribed from old vault ${pda}`);
+      });
   
-      subscribeToVaults();
+      vaultSubscriptionIds.current = newSubscriptions;
   
-      // Limpieza al desmontar
+    }, [wallet, nfts, connection, fetchProgramData]);
+
+    // Subscription to NFT token account changes (transfers)
+    useEffect(() => {
+        if (!wallet || !nfts.length || !connection || !fetchProgramData) return;
+
+        const newSubscriptions = new Map<string, number>();
+
+        nfts.forEach(nft => {
+            const nftMintPubkey = new PublicKey(nft.mintAddress);
+            const tokenAccount = getAssociatedTokenAddressSync(nftMintPubkey, wallet.publicKey);
+
+            if (tokenAccountSubscriptionIds.current.has(tokenAccount.toString())) {
+                newSubscriptions.set(tokenAccount.toString(), tokenAccountSubscriptionIds.current.get(tokenAccount.toString())!);
+                tokenAccountSubscriptionIds.current.delete(tokenAccount.toString());
+            } else {
+                const subscriptionId = connection.onAccountChange(
+                    tokenAccount,
+                    (accountInfo, context) => {
+                        // If accountInfo.data is null, the account was closed (transferred)
+                        console.log(`Token account ${tokenAccount.toString()} for NFT ${nft.name} changed at slot ${context.slot}`);
+                        if (!accountInfo.data) {
+                           console.log(`NFT ${nft.name} likely transferred. Refetching data.`);
+                           fetchProgramData();
+                        }
+                    },
+                    'confirmed'
+                );
+                newSubscriptions.set(tokenAccount.toString(), subscriptionId);
+                console.log(`Subscribed to token account ${tokenAccount.toString()} with ID ${subscriptionId}`);
+            }
+        });
+
+        // Unsubscribe from old token accounts
+        tokenAccountSubscriptionIds.current.forEach((id, pda) => {
+            connection.removeAccountChangeListener(id);
+            console.log(`Unsubscribed from old token account ${pda}`);
+        });
+
+        tokenAccountSubscriptionIds.current = newSubscriptions;
+
+    }, [wallet, nfts, connection, fetchProgramData]);
+
+    // Cleanup subscriptions on disconnect
+    useEffect(() => {
       return () => {
-          subscriptionIds.current.forEach((id, pda) => {
-              connection.removeAccountChangeListener(id);
-              console.log(`Unsubscribed from ${pda} with ID ${id}`);
-          });
-          subscriptionIds.current.clear();
+        vaultSubscriptionIds.current.forEach((id) => {
+            connection.removeAccountChangeListener(id);
+        });
+        vaultSubscriptionIds.current.clear();
+        tokenAccountSubscriptionIds.current.forEach((id) => {
+            connection.removeAccountChangeListener(id);
+        });
+        tokenAccountSubscriptionIds.current.clear();
       };
-  }, [wallet, nfts, connection, fetchProgramData]);
+    }, [connection, wallet]);
 
 
     const onAction = async (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => {
@@ -266,11 +324,14 @@ export const useSolana = () => {
         const founderVaultPda = new PublicKey(pda);
         
         try {
-            const decimals = (await getMint(connection, ASMV_MINT, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
+            const vaultAccount = await program.account.founderVault.fetch(founderVaultPda);
+            const asmvMintFromVault = vaultAccount.asmvMint;
+            
+            const decimals = (await getMint(connection, asmvMintFromVault, undefined, TOKEN_2022_PROGRAM_ID)).decimals;
             const amountInLamports = new BN(amount * (10 ** decimals));
 
             if (actionType === 'Deposit') {
-                const userAsmvAta = getAssociatedTokenAddressSync(ASMV_MINT, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID);
+                const userAsmvAta = getAssociatedTokenAddressSync(asmvMintFromVault, wallet.publicKey, false, TOKEN_2022_PROGRAM_ID);
                 const balance = await balanceOf(connection, userAsmvAta);
                 
                 if (balance.lt(amountInLamports)) {
@@ -279,7 +340,7 @@ export const useSolana = () => {
                 }
     
                 const asmvVaultAta = getAssociatedTokenAddressSync(
-                    ASMV_MINT,
+                    asmvMintFromVault,
                     founderVaultPda,
                     true,
                     TOKEN_2022_PROGRAM_ID
@@ -293,7 +354,7 @@ export const useSolana = () => {
                         founderVault: founderVaultPda,
                         userAsmvAccount: userAsmvAta,
                         asmvFounderVault: asmvVaultAta,
-                        asmvMint: ASMV_MINT,
+                        asmvMint: asmvMintFromVault,
                         tokenProgram: TOKEN_2022_PROGRAM_ID,
                         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                         systemProgram: SystemProgram.programId,
@@ -325,14 +386,14 @@ export const useSolana = () => {
             } else if (actionType === 'Redeem') {
                 
                 const asmvVaultAta = getAssociatedTokenAddressSync(
-                    ASMV_MINT,
+                    asmvMintFromVault,
                     founderVaultPda,
                     true,
                     TOKEN_2022_PROGRAM_ID
                 );
 
                 const userAsmvAta = getAssociatedTokenAddressSync(
-                    ASMV_MINT,
+                    asmvMintFromVault,
                     wallet.publicKey,
                     false,
                     TOKEN_2022_PROGRAM_ID
@@ -346,7 +407,7 @@ export const useSolana = () => {
                         founderVault: founderVaultPda,
                         asmvFounderVault: asmvVaultAta,
                         userAsmvAccount: userAsmvAta,
-                        asmvMint: ASMV_MINT,
+                        asmvMint: asmvMintFromVault,
                         tokenProgram: TOKEN_2022_PROGRAM_ID,
                         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
                         systemProgram: SystemProgram.programId,

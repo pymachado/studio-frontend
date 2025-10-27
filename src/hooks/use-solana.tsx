@@ -8,7 +8,7 @@ import { PublicKey, SystemProgram, Transaction, Keypair } from '@solana/web3.js'
 import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getMint, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
-import { fetchAssetsByOwner, mplCore, create, ruleSet, getAssetWithProof, transferV1 } from '@metaplex-foundation/mpl-core';
+import { fetchAssetsByOwner, mplCore, create, ruleSet, transferV1 } from '@metaplex-foundation/mpl-core';
 import { generateSigner, Signer } from '@metaplex-foundation/umi';
 import { toWeb3JsInstruction, toWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
 

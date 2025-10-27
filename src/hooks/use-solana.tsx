@@ -4,11 +4,14 @@ import idl from '@/lib/idl.json';
 import { useConnection, useAnchorWallet } from '@solana/wallet-adapter-react';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
 import { toast } from 'react-toastify';
-import { PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, getMint } from '@solana/spl-token';
+import { PublicKey, SystemProgram, Transaction, Keypair } from '@solana/web3.js';
+import { getAssociatedTokenAddress, TOKEN_2022_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync, getMint, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { walletAdapterIdentity } from '@metaplex-foundation/umi-signer-wallet-adapters';
-import { fetchAssetsByOwner, mplCore } from '@metaplex-foundation/mpl-core';
+import { fetchAssetsByOwner, mplCore, create, ruleSet, getAssetWithProof, transferV1 } from '@metaplex-foundation/mpl-core';
+import { generateSigner, Signer } from '@metaplex-foundation/umi';
+import { toWeb3JsInstruction, toWeb3JsKeypair } from '@metaplex-foundation/umi-web3js-adapters';
+
 import { Buffer } from 'buffer';
 import type { AsimovNftVaults } from '@/lib/types/asimov_nft_vaults';
 
@@ -48,7 +51,7 @@ const balanceOf = async (connection: any, tokenAccount: PublicKey) => {
 export const useSolana = () => {
     const { connection } = useConnection();
     const wallet = useAnchorWallet();
-    const [program, setProgram] = useState<Program<Idl>>();
+    const [program, setProgram] = useState<Program<AsimovNftVaults>>();
     const [provider, setProvider] = useState<AnchorProvider | null>(null);
     const [umi, setUmi] = useState<any>(null);
 
@@ -69,8 +72,8 @@ export const useSolana = () => {
         if (wallet && connection) {
             const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
             setProvider(provider);
-            const programInstance = new Program(idl, provider);
-            setProgram(programInstance);
+            const programInstance = new Program(idl as Idl, provider);
+            setProgram(programInstance as Program<AsimovNftVaults>);
 
             const newUmiWithWallet = createUmi(connection.rpcEndpoint).use(walletAdapterIdentity(wallet));
             newUmiWithWallet.use(mplCore());
@@ -105,7 +108,7 @@ export const useSolana = () => {
                 program.programId
             );
 
-            const asmvVaultAta = await getAssociatedTokenAddress(ASMV_MINT, founderVaultPda, true);
+            const asmvVaultAta = await getAssociatedTokenAddress(ASMV_MINT, founderVaultPda, true, TOKEN_2022_PROGRAM_ID);
 
             const txSignature = await program.methods
                 .initVault(nftMintPubkey, ASMV_MINT)
@@ -204,7 +207,7 @@ export const useSolana = () => {
         } catch (error) {
             console.error('Error fetching program data:', error);
             if (error instanceof Error && !error.message.includes('Wallet-adapter')) {
-               toast.error('Failed to fetch wallet data.');
+               // toast.error('Failed to fetch wallet data.');
             }
         } finally {
             setIsFetching(false);
@@ -219,50 +222,38 @@ export const useSolana = () => {
 
     // Subscription logic
     useEffect(() => {
-        if (!wallet || !nfts.length || !connection) return;
-
-        const newSubscriptions = new Map<string, number>();
-
-        const subscribeToVaults = async () => {
-            nfts.forEach(nft => {
-                if(nft.needsInitialization) return;
-
-                const vaultPda = new PublicKey(nft.pda);
-                if (subscriptionIds.current.has(vaultPda.toString())) {
-                    newSubscriptions.set(vaultPda.toString(), subscriptionIds.current.get(vaultPda.toString())!);
-                    subscriptionIds.current.delete(vaultPda.toString());
-                } else {
-                    const subscriptionId = connection.onAccountChange(
-                        vaultPda,
-                        async (accountInfo, context) => {
-                            console.log(`Account ${vaultPda.toString()} changed at slot ${context.slot}`);
-                            await fetchProgramData(); 
-                        },
-                        {commitment: 'confirmed'}
-                    );
-                    newSubscriptions.set(vaultPda.toString(), subscriptionId);
-                    console.log(`Subscribed to ${vaultPda.toString()} with ID ${subscriptionId}`);
-                }
-            });
-             // Unsubscribe from old vaults that are no longer in the list
-            subscriptionIds.current.forEach((id, pda) => {
-                connection.removeAccountChangeListener(id);
-                console.log(`Unsubscribed from ${pda} with ID ${id}`);
-            });
-            subscriptionIds.current = newSubscriptions;
-        };
-
-        subscribeToVaults();
-
-        // Cleanup on component unmount
-        return () => {
-            subscriptionIds.current.forEach((id, pda) => {
-                connection.removeAccountChangeListener(id);
-                console.log(`Unsubscribed from ${pda} with ID ${id}`);
-            });
-            subscriptionIds.current.clear();
-        };
-    }, [wallet, nfts, connection, fetchProgramData]);
+      if (!wallet || !nfts.length || !connection || !fetchProgramData) return;
+  
+      const subscribeToVaults = async () => {
+          nfts.forEach(vault => {
+              if (vault.needsInitialization) return;
+              const vaultPda = new PublicKey(vault.pda);
+              if (!subscriptionIds.current.has(vaultPda.toString())) {
+                  const subscriptionId = connection.onAccountChange(
+                      vaultPda,
+                      async (accountInfo, context) => {
+                          console.log(`Account ${vaultPda.toString()} changed at slot ${context.slot}`);
+                          await fetchProgramData(); // Refetch vaults al detectar un cambio
+                      },
+                      {commitment: 'confirmed'}
+                  );
+                  subscriptionIds.current.set(vaultPda.toString(), subscriptionId);
+                  console.log(`Subscribed to ${vaultPda.toString()} with ID ${subscriptionId}`);
+              }
+          });
+      };
+  
+      subscribeToVaults();
+  
+      // Limpieza al desmontar
+      return () => {
+          subscriptionIds.current.forEach((id, pda) => {
+              connection.removeAccountChangeListener(id);
+              console.log(`Unsubscribed from ${pda} with ID ${id}`);
+          });
+          subscriptionIds.current.clear();
+      };
+  }, [wallet, nfts, connection, fetchProgramData]);
 
 
     const onAction = async (mint: string, pda: string, amount: number, actionType: 'Deposit' | 'Redeem') => {
@@ -312,12 +303,13 @@ export const useSolana = () => {
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
                 const tx = new Transaction().add(depositInstruction);
                 tx.recentBlockhash = blockhash;
+                tx.feePayer = provider.publicKey;
             
-                const txSignature = await provider.sendAndConfirm(tx, provider.wallet.payer, {skipPreflight: true});
+                const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
                 const SOLSCAN_URL = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
                 toast.success(
                     <div>
-                        Deposited {amount} ASMOV successfully!{' '}
+                        Deposited {amount} ASMV successfully!{' '}
                         <a
                             href={SOLSCAN_URL}
                             target="_blank"
@@ -364,13 +356,14 @@ export const useSolana = () => {
                 const {blockhash} = await connection.getLatestBlockhash('confirmed');
                 const tx = new Transaction().add(redeemInstruction);
                 tx.recentBlockhash = blockhash;
+                tx.feePayer = provider.publicKey;
                 
 
-                const txSignature = await provider.sendAndConfirm(tx, provider.wallet.payer, {skipPreflight: true});
+                const txSignature = await provider.sendAndConfirm(tx, [], {skipPreflight: true});
                 const SOLSCAN_URL = `https://solscan.io/tx/${txSignature}?cluster=devnet`;
                 toast.success(
                     <div>
-                        Redeemed {amount} ASMOV successfully!{' '}
+                        Redeemed {amount} ASMV successfully!{' '}
                         <a
                             href={SOLSCAN_URL}
                             target="_blank"
@@ -391,16 +384,114 @@ export const useSolana = () => {
         }
     };
     
-    const onMint = async (name: string, uri: string) => {
-        if (!program || !wallet) {
-            throw new Error("Wallet or Program not connected.");
+    const onMint = async () => {
+        if (!wallet || !umi || !program || !provider) {
+            toast.error("Wallet or program not connected/initialized.");
+            return;
         }
         
-        console.log("Simulating mint for:", name, uri);
+        const toastId = toast.loading("Minting NFT and creating vault...");
+
+        try {
+            const [counterVaultPda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('counter_vault')],
+                program.programId
+            );
+
+            const counterData = await program.account.counterVault.fetch(counterVaultPda);
+            const currentCount = counterData.count;
+            
+            // Step 1: Mint NFT with UMI
+            const assetSigner = generateSigner(umi);
+            const umiMintInstructions = await create(umi, {
+                asset: assetSigner,
+                name: `Founder Pass NFT #${currentCount + 1}`,
+                uri: 'https://azure-petite-swan-479.mypinata.cloud/ipfs/bafkreia6jnqssbuegspkuivfg4y4beh5rfamdlafxeo36y2j3hswh3nxly',
+                plugins: [
+                    {
+                        type: 'Royalties',
+                        basisPoints: 500,
+                        creators: [
+                            {
+                                address: wallet.publicKey.toString(), // The creator
+                                percentage: 100,
+                            },
+                        ],
+                        ruleSet: ruleSet('None'),
+                    },
+                ],
+            }).getInstructions();
+
+            const nftMintAddress = assetSigner.publicKey;
+            const web3JsMintInstructions = umiMintInstructions.map(toWeb3JsInstruction);
+            const web3JsAssetSigner = toWeb3JsKeypair(assetSigner as Signer);
         
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        await fetchProgramData();
+            const tx = new Transaction().add(...web3JsMintInstructions);
+
+            // Step 2: Initialize Vault with Anchor
+            const nftMintPubkey = new PublicKey(nftMintAddress);
+
+            const [founderVaultPda] = PublicKey.findProgramAddressSync(
+                [Buffer.from('founder_vault'), nftMintPubkey.toBuffer()],
+                program.programId
+            );
+
+            const asmvVaultAta = getAssociatedTokenAddressSync(
+                ASMV_MINT,
+                founderVaultPda,
+                true,
+                TOKEN_2022_PROGRAM_ID
+            );
+            
+            const initVaultInstruction = await program.methods
+                .initVault(nftMintPubkey, ASMV_MINT)
+                .accounts({
+                    user: provider.publicKey,
+                    nftMint: nftMintPubkey,
+                    asmvMint: ASMV_MINT,
+                    founderVault: founderVaultPda,
+                    asmvVault: asmvVaultAta,
+                    counterVault: counterVaultPda,
+                    tokenProgram: TOKEN_2022_PROGRAM_ID,
+                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                    systemProgram: SystemProgram.programId,
+                }).instruction();
+
+            tx.add(initVaultInstruction);
+            
+            const { blockhash } = await connection.getLatestBlockhash('confirmed');
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = provider.publicKey;
+            
+            const signature = await provider.sendAndConfirm(tx, [web3JsAssetSigner], {skipPreflight: true});
+            
+            const VAULT_SOLSCAN_URL = `https://solscan.io/tx/${signature}?cluster=devnet`;
+
+            toast.update(toastId, {
+                render: <div>
+                    NFT minted and vault created!{' '}
+                    <a href={VAULT_SOLSCAN_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'blue', textDecoration: 'underline' }}>
+                        View on Solscan
+                    </a>
+                </div>,
+                type: 'success',
+                isLoading: false,
+                autoClose: 8000,
+                closeOnClick: false,
+            });
+
+            await fetchProgramData();
+
+        } catch (error) {
+            console.error('Error creating NFT or vault:', error);
+            toast.update(toastId, {
+                render: `Error: ${(error as Error).message}`,
+                type: 'error',
+                isLoading: false,
+                autoClose: 5000,
+            });
+            throw error;
+        }
     };
 
     return { isFetching, totalBalance, nfts, nftCount: nfts.length, onAction, onMint, onInitialize };

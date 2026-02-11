@@ -88,7 +88,7 @@ Para que la UI refleje el estado de la blockchain sin necesidad de recargar la p
     -   El hook se suscribe a los cambios en cada cuenta `FounderVault` del usuario.
     -   Cuando el saldo de una bóveda cambia (por un depósito o canje), el listener se activa y llama a `fetchProgramData()` para recargar toda la información y actualizar la UI.
 
--   **Suscripción a Transferencias de NFT (Bug Fix Crítico)**:
-    -   Este es un mecanismo clave para la consistencia. El hook también se suscribe a la **cuenta de token del NFT** que está en la wallet del usuario.
+-   **Manejo de Transferencias de NFT (Sincronización Automática)**:
+    -   Este es un mecanismo clave para mantener la consistencia de los datos en tiempo real. El hook también se suscribe a la **cuenta de token del NFT** que está en la wallet del usuario.
     -   Si el usuario transfiere o vende el NFT, esa cuenta de token se cierra (su `data` se vuelve `null`).
     -   El listener detecta este cambio, entiende que el NFT ya no pertenece al usuario, y dispara `fetchProgramData()`. Esto elimina el NFT de la vista del usuario y le impide interactuar con una bóveda que ya no le corresponde.

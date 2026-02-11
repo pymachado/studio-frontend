@@ -13,6 +13,53 @@ Welcome to the ASIMOV Vault Manager, a decentralized application (dApp) built on
 
 ---
 
+## Local Development Setup
+
+To run this project locally, you'll need Node.js and a Solana wallet browser extension (like Phantom).
+
+### 1. Clone the Repository
+
+First, clone the repository to your local machine and navigate into the project directory.
+
+```bash
+# Clone the repository
+git clone <repository-url>
+
+# Navigate into the project directory
+cd <project-directory>
+```
+
+### 2. Install Dependencies
+
+Install the necessary project dependencies using npm:
+
+```bash
+npm install
+```
+
+### 3. Set Up Your Solana Wallet
+
+For the application to function correctly, you need to configure your Solana wallet:
+
+1.  **Switch to Devnet**: Open your wallet extension and switch the network to **Devnet**. The smart contract is deployed on this network.
+2.  **Airdrop SOL**: You will need some Devnet SOL to pay for transaction fees (like minting an NFT). You can get some for free using the Solana CLI or a public faucet.
+    *   **Using Solana CLI**: `solana airdrop 1 YOUR_WALLET_ADDRESS --url https://api.devnet.solana.com`
+    *   **Using a Faucet**: Visit a website like `https://solfaucet.com/` and request Devnet SOL.
+
+*Note: To use the `Deposit` feature, you would need `ASMV` tokens. This demo does not include a faucet for these tokens.*
+
+### 4. Run the Development Server
+
+Once the dependencies are installed, you can start the Next.js development server:
+
+```bash
+npm run dev
+```
+
+The application will be available at `http://localhost:9002`. You can now connect your wallet and start interacting with the dApp.
+
+---
+
 ## General Application Flow
 
 The dashboard is designed to be the main interface for interacting with the smart contract deployed on the Solana Devnet. All business logic and communication with the blockchain are centralized in the `src/hooks/use-solana.tsx` hook.
